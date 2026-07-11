@@ -508,16 +508,17 @@ export default function AdminSettings({
           </div>
 
           {/* Configuration Instructions */}
-          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-xs text-blue-900 space-y-2">
-            <h4 className="font-extrabold flex items-center gap-1.5 text-blue-950">
+          <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100 text-xs text-slate-800 space-y-3">
+            <h4 className="font-extrabold flex items-center gap-1.5 text-blue-950 text-sm">
               <ShieldAlert className="w-4 h-4 text-[#2563eb] shrink-0" />
-              <span>คู่มือการเชื่อมต่อตารางชีต (Google Sheets)</span>
+              <span>แนะนำการใช้งานระบบบริหารจัดการหอพัก</span>
             </h4>
-            <ol className="list-decimal list-inside space-y-1 text-slate-600 font-medium">
-              <li>สร้างไฟล์ Google Sheets ใหม่ใน Google Drive ของคุณ</li>
-              <li>เปิดสคริปต์แก้ไข (Extensions &gt; Apps Script) และวางโค้ด Web App</li>
-              <li>กด Deploy เป็น Web App โดยตั้งสิทธิ์เข้าถึง "Anyone" (ทุกคนสามารถเข้าถึงได้)</li>
-              <li>คัดลอกที่อยู่ URL นำมาใส่ในช่องด้านบนนี้แล้วกดซิงค์ข้อมูล</li>
+            <ol className="list-decimal list-inside space-y-2 text-slate-600 font-semibold">
+              <li><strong className="text-slate-900 font-bold">จัดการห้องพัก:</strong> เพิ่มห้องพัก ตั้งค่าอัตราค่าเช่ารายเดือน และขั้นต่ำน้ำ-ไฟสำหรับแต่ละห้องพักในระบบ</li>
+              <li><strong className="text-slate-900 font-bold">ทำสัญญาผู้เช่าอาศัย:</strong> ลงทะเบียนสัญญาผู้เช่าใหม่ ระบุชื่อ เบอร์โทร และบันทึกเลขมิเตอร์น้ำและไฟฟ้าเริ่มต้นให้ถูกต้อง</li>
+              <li><strong className="text-slate-900 font-bold">บันทึกจดมิเตอร์น้ำ-ไฟ:</strong> ป้อนเลขจดบันทึกของหน่วยล่าสุดประจำรอบเดือน ระบบจะคำนวณส่วนต่างค่าน้ำและค่าไฟฟ้าและออกยอดจัดเก็บให้ทันที</li>
+              <li><strong className="text-slate-900 font-bold">ตรวจสอบและออกบิลสรุป:</strong> เรียกดูและสั่งพิมพ์ใบแจ้งหนี้แบบเดี่ยวรายห้อง หรือพิมพ์สรุปงบการเงินแบบรวม 15 ห้องต่อหน้าเพื่อความสะดวกรวดเร็ว</li>
+              <li><strong className="text-slate-900 font-bold">ชำระเงินแบบตัดบิล FIFO:</strong> บันทึกรับชำระเงินโดยระบบจะหักลบยอดหนี้ค้างเก่าตามลำดับประวัติบิลก่อนหลังอย่างถูกต้องแม่นยำ</li>
             </ol>
           </div>
         </div>

@@ -17,6 +17,7 @@ import {
   Lock, 
   Eye, 
   ChevronRight,
+  ChevronLeft,
   Info,
   Layers,
   Database
@@ -99,6 +100,15 @@ export default function App() {
 
   // Current selected tab index
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+
+  // Sidebar collapsed state for desktop
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("dorm_sidebar_collapsed") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("dorm_sidebar_collapsed", isSidebarCollapsed.toString());
+  }, [isSidebarCollapsed]);
 
   // State caches for reactive UI binding
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -483,13 +493,13 @@ export default function App() {
           <div className="bg-white py-8 px-6 shadow-xl rounded-3xl border border-slate-100 space-y-6">
             
             {/* Quick Credentials Info Alert */}
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start space-x-2 text-xs text-blue-800">
+            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start space-x-2 text-xs text-blue-800 leading-relaxed">
               <Info className="w-4 h-4 shrink-0 text-blue-500 mt-0.5" />
               <div>
-                <strong className="block text-slate-800 font-black mb-0.5">🔑 เข้าทดสอบระบบ (Credentials)</strong>
-                บัญชีใช้งานเริ่มต้นสำหรับทดสอบระบบนิติบุคคลหน้าตาบิล:<br />
-                • ชื่อผู้ใช้: <span className="font-extrabold text-blue-600 font-mono">admin</span><br />
-                • รหัสเข้า (PIN 6 หลัก): <span className="font-extrabold text-blue-600 font-mono">123400</span>
+                <strong className="block text-slate-800 font-bold mb-1">แนะนำการใช้งานระบบนิติบุคคล</strong>
+                <p className="text-slate-600 font-medium">
+                  เข้าสู่ระบบนิติบุคคลเพื่อทดสอบและใช้งานการจัดการหอพัก จัดการสัญญาผู้เช่า บันทึกหน่วยน้ำ-ไฟล่าสุด และพิมพ์บิลหรือใบแจ้งหนี้แบบสรุปยอดค้างชำระ
+                </p>
               </div>
             </div>
 
@@ -561,7 +571,10 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-sm font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
-            <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider">Dorm Ops Portal</p>
+            <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Dorm Ops Portal</span>
+              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+            </p>
           </div>
         </div>
         <button 
@@ -609,7 +622,10 @@ export default function App() {
                   </div>
                   <div>
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
-                    <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider">Dorm Ops Portal</p>
+                    <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>Dorm Ops Portal</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+                    </p>
                   </div>
                 </div>
                 <button 
@@ -678,16 +694,34 @@ export default function App() {
       </AnimatePresence>
 
       {/* Navigation Left Sidebar (Desktop Only) */}
-      <aside className="hidden md:flex no-print w-64 bg-[#2563eb] text-white flex-col shrink-0 p-4 md:p-6 border-r border-[#1e40af]">
+      <aside className={`hidden md:flex no-print ${isSidebarCollapsed ? "w-20 px-3 py-6" : "w-64 p-4 md:p-6"} bg-[#2563eb] text-white flex-col shrink-0 border-r border-[#1e40af] transition-all duration-300 relative`}>
+        {/* Collapse Toggle Button */}
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute -right-3 top-7 w-6 h-6 rounded-full bg-white text-[#2563eb] border border-slate-200 flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-all cursor-pointer z-50"
+          title={isSidebarCollapsed ? "ขยายแถบเมนู" : "ย่อ/ซ้อนแถบเมนู"}
+        >
+          {isSidebarCollapsed ? (
+            <ChevronRight className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronLeft className="w-3.5 h-3.5" />
+          )}
+        </button>
+
         {/* Brand Header */}
-        <div className="p-2 md:p-3 flex items-center gap-3 border-b border-white/10 pb-5 mb-5 shrink-0">
+        <div className={`p-2 flex items-center ${isSidebarCollapsed ? "justify-center" : "gap-3"} border-b border-white/10 pb-5 mb-5 shrink-0`}>
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-md">
             <Building className="w-5 h-5 text-[#2563eb]" />
           </div>
-          <div>
-            <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
-            <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider">Dorm Ops Portal</p>
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="overflow-hidden transition-all duration-300">
+              <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
+              <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Dorm Ops Portal</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Navigation links list */}
@@ -699,35 +733,40 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-2" : "justify-between px-4"} py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   isActive 
                     ? "bg-white/10 text-white shadow-sm" 
                     : "text-white/75 hover:bg-white/5 hover:text-white"
                 }`}
+                title={isSidebarCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center space-x-3">
                   <Icon className="w-4.5 h-4.5 shrink-0" />
-                  <span>{item.label}</span>
+                  {!isSidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
                 </div>
-                <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isActive ? "opacity-100 translate-x-0.5" : "opacity-0"}`} />
+                {!isSidebarCollapsed && (
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isActive ? "opacity-100 translate-x-0.5" : "opacity-0"}`} />
+                )}
               </button>
             );
           })}
         </nav>
 
         {/* Profile and Logout footer */}
-        <div className="p-2 md:p-3 border-t border-white/10 mt-auto pt-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-400/30 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-xs uppercase shadow-inner shrink-0">
+        <div className={`border-t border-white/10 mt-auto pt-4 shrink-0 ${isSidebarCollapsed ? "px-1" : "p-2 md:p-3"}`}>
+          <div className={`flex items-center ${isSidebarCollapsed ? "flex-col gap-4 justify-center" : "gap-3"}`}>
+            <div className="w-10 h-10 rounded-full bg-blue-400/30 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-xs uppercase shadow-inner shrink-0" title={user.username}>
               {user.username.slice(0, 2)}
             </div>
-            <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold truncate text-white">{user.username}</p>
-              <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">ผู้จัดการหอพัก</p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="overflow-hidden flex-1">
+                <p className="text-sm font-semibold truncate text-white">{user.username}</p>
+                <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">ผู้จัดการหอพัก</p>
+              </div>
+            )}
             <button 
               onClick={handleLogout}
-              className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+              className={`p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer ${isSidebarCollapsed ? "w-full flex justify-center" : ""}`}
               title="ออกจากระบบ"
             >
               <LogOut className="w-3.5 h-3.5" />
