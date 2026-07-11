@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from "react";
-import { Check, Printer, FileText, HandCoins, Receipt, X } from "lucide-react";
-import { Bill, BankAccount } from "../types";
+import { Check, Printer, FileText, HandCoins, Receipt, X, PlusCircle, Trash2, AlertCircle, Edit2 } from "lucide-react";
+import { Bill, BankAccount, AddedItem } from "../types";
 
 interface BillsProps {
   bills: Bill[];
@@ -15,11 +15,104 @@ interface BillsProps {
   onBulkPay?: (payments: { roomId: string; amount: number; method: "เงินสด" | "โอนธนาคาร"; receiver: string; note: string }[]) => void;
   onPrintInvoices: (roomIds: string[]) => void;
   onPrintSummary: (roomIds?: string[]) => void;
+  onGetAddedItems?: (roomId: string, month: string) => AddedItem[];
+  onSaveAddedItem?: (item: AddedItem) => void;
+  onDeleteAddedItem?: (id: string, roomId: string, month: string) => void;
 }
 
-export default function Bills({ bills, banks, month, onPayFIFO, onBulkPay, onPrintInvoices, onPrintSummary }: BillsProps) {
+export default function Bills({ 
+  bills, 
+  banks, 
+  month, 
+  onPayFIFO, 
+  onBulkPay, 
+  onPrintInvoices, 
+  onPrintSummary,
+  onGetAddedItems,
+  onSaveAddedItem,
+  onDeleteAddedItem
+}: BillsProps) {
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [paymentModalData, setPaymentModalData] = useState<{ roomId: string; roomName: string; balance: number } | null>(null);
+
+  // Supplementary added items modal states
+  const [addedItemsModalRoom, setAddedItemsModalRoom] = useState<{ id: string; name: string } | null>(null);
+  const [addedItems, setAddedItems] = useState<AddedItem[]>([]);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemAmount, setNewItemAmount] = useState(0);
+  const [newItemNote, setNewItemNote] = useState("");
+  const [editingItem, setEditingItem] = useState<AddedItem | null>(null);
+
+  const handleOpenAddedItemsModal = (roomId: string, roomName: string) => {
+    setAddedItemsModalRoom({ id: roomId, name: roomName });
+    setEditingItem(null);
+    if (onGetAddedItems) {
+      const items = onGetAddedItems(roomId, month);
+      setAddedItems(items);
+    }
+    setNewItemName("");
+    setNewItemAmount(0);
+    setNewItemNote("");
+  };
+
+  const handleAddAddedItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addedItemsModalRoom || !newItemName.trim() || newItemAmount <= 0) return;
+
+    if (onSaveAddedItem) {
+      onSaveAddedItem({
+        id: editingItem ? editingItem.id : "",
+        roomId: addedItemsModalRoom.id,
+        month,
+        name: newItemName.trim(),
+        amount: Number(newItemAmount),
+        note: newItemNote.trim()
+      });
+    }
+
+    // Refresh list
+    if (onGetAddedItems) {
+      const items = onGetAddedItems(addedItemsModalRoom.id, month);
+      setAddedItems(items);
+    }
+    setEditingItem(null);
+    setNewItemName("");
+    setNewItemAmount(0);
+    setNewItemNote("");
+  };
+
+  const handleDeleteAddedItem = (id: string) => {
+    if (!addedItemsModalRoom) return;
+    if (onDeleteAddedItem) {
+      onDeleteAddedItem(id, addedItemsModalRoom.id, month);
+    }
+    // If we're deleting the item currently being edited, cancel edit mode
+    if (editingItem && editingItem.id === id) {
+      setEditingItem(null);
+      setNewItemName("");
+      setNewItemAmount(0);
+      setNewItemNote("");
+    }
+    // Refresh list
+    if (onGetAddedItems) {
+      const items = onGetAddedItems(addedItemsModalRoom.id, month);
+      setAddedItems(items);
+    }
+  };
+
+  const handleStartEditAddedItem = (item: AddedItem) => {
+    setEditingItem(item);
+    setNewItemName(item.name);
+    setNewItemAmount(item.amount);
+    setNewItemNote(item.note || "");
+  };
+
+  const handleCancelEditAddedItem = () => {
+    setEditingItem(null);
+    setNewItemName("");
+    setNewItemAmount(0);
+    setNewItemNote("");
+  };
 
   // Bulk payment modal states
   const [bulkPaymentModalOpen, setBulkPaymentModalOpen] = useState(false);
@@ -204,7 +297,34 @@ export default function Bills({ bills, banks, month, onPayFIFO, onBulkPay, onPri
                         <div>ไฟ: {b.elecUnits} u ({formatCurrency(b.elecCost)})</div>
                       </td>
                       <td className="px-4 py-4 font-semibold text-slate-600">{formatCurrency(b.rentCost)}</td>
-                      <td className="px-4 py-4 font-semibold text-slate-500">{formatCurrency(b.addedCost)}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col space-y-1">
+                          {(() => {
+                            const hasItems = onGetAddedItems ? onGetAddedItems(b.roomId, month).length > 0 : false;
+                            const itemsCount = onGetAddedItems ? onGetAddedItems(b.roomId, month).length : 0;
+                            return (
+                              <>
+                                <span className={`font-semibold ${hasItems ? "text-emerald-600 font-bold" : "text-slate-700"}`}>
+                                  {formatCurrency(b.addedCost)}
+                                </span>
+                                {onGetAddedItems && (
+                                  <button
+                                    onClick={() => handleOpenAddedItemsModal(b.roomId, b.roomName)}
+                                    className={`text-[10px] font-bold text-left inline-flex items-center space-x-0.5 cursor-pointer hover:underline ${
+                                      hasItems 
+                                        ? "text-emerald-600 hover:text-emerald-800" 
+                                        : "text-blue-600 hover:text-blue-800"
+                                    }`}
+                                  >
+                                    <PlusCircle className={`w-3.5 h-3.5 shrink-0 ${hasItems ? "text-emerald-500" : "text-blue-500"}`} />
+                                    <span>จัดการรายจ่ายเสริม {hasItems && `(${itemsCount})`}</span>
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="px-4 py-4 font-bold text-rose-500">{formatCurrency(b.prevUnpaid)}</td>
                       <td className="px-4 py-4 font-extrabold text-blue-600">{formatCurrency(b.total)}</td>
                       <td className="px-4 py-4 font-bold text-emerald-600">{formatCurrency(b.paid)}</td>
@@ -431,6 +551,176 @@ export default function Bills({ bills, banks, month, onPayFIFO, onBulkPay, onPri
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Added Items Manage Modal (Manage extra expenses directly from bills) */}
+      {addedItemsModalRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-800">
+                  {editingItem ? "✏️ แก้ไขรายจ่ายเสริมอื่นๆ" : "⚙️ จัดการรายจ่ายเสริมอื่นๆ"}: ห้อง {addedItemsModalRoom.name}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">รอบบริการทางการเงินประจำเดือน: {month}</p>
+              </div>
+              <button 
+                onClick={() => setAddedItemsModalRoom(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Form to add or edit item */}
+              <form onSubmit={handleAddAddedItem} className={`p-4 rounded-xl border space-y-2.5 transition-all ${
+                editingItem ? "bg-amber-50/60 border-amber-200" : "bg-slate-50 border-slate-150"
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-slate-700">
+                    {editingItem ? "กำลังแก้ไขข้อมูล:" : "เพิ่มรายการใหม่:"}
+                  </span>
+                  {editingItem && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditAddedItem}
+                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                    >
+                      ยกเลิกแก้ไข
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">ชื่อเรียกรายจ่ายเสริม *</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs text-slate-800"
+                      placeholder="เช่น จอดรถยนต์, ซ่อมก๊อกน้ำ"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">จำนวนเงิน (บาท) *</label>
+                    <input 
+                      type="number" 
+                      required 
+                      value={newItemAmount || ""}
+                      onChange={(e) => setNewItemAmount(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs text-slate-800 font-bold"
+                      placeholder="ระบุจำนวนเงิน"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">หมายเหตุย่อยช่วยจำ</label>
+                  <input 
+                    type="text" 
+                    value={newItemNote}
+                    onChange={(e) => setNewItemNote(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs text-slate-700"
+                    placeholder="รายละเอียดจำเพาะเจาะจง..."
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    type="submit" 
+                    className={`w-full py-2 text-white font-bold rounded-lg text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm ${
+                      editingItem 
+                        ? "bg-amber-600 hover:bg-amber-700 shadow-amber-500/10" 
+                        : "bg-blue-600 hover:bg-blue-700 shadow-blue-500/10"
+                    }`}
+                  >
+                    {editingItem ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>บันทึกการแก้ไข</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>เพิ่มบันทึกรายจ่ายเสริม</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Added item rows table */}
+              <div className="border border-slate-100 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-400 font-bold border-b border-slate-100">
+                      <th className="px-4 py-2 text-[10px]">ชื่อรายจ่าย</th>
+                      <th className="px-4 py-2 text-[10px]">ราคา</th>
+                      <th className="px-4 py-2 text-[10px]">หมายเหตุ</th>
+                      <th className="px-4 py-2 text-center text-[10px] w-20">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {addedItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-slate-400 text-xs">
+                          ยังไม่มีค่าบริการเสริมใดๆ ในเดือนนี้
+                        </td>
+                      </tr>
+                    ) : (
+                      addedItems.map(it => {
+                        const isEditingThis = editingItem?.id === it.id;
+                        return (
+                          <tr key={it.id} className={`border-b border-slate-100 text-xs transition-colors ${
+                            isEditingThis ? "bg-amber-50/50" : "text-slate-700 hover:bg-slate-50/50"
+                          }`}>
+                            <td className="px-4 py-2.5 font-bold">
+                              {isEditingThis && <span className="text-amber-600 mr-1">●</span>}
+                              {it.name}
+                            </td>
+                            <td className="px-4 py-2.5 font-bold text-blue-600">{formatCurrency(it.amount)}</td>
+                            <td className="px-4 py-2.5 text-slate-400 truncate max-w-[100px]">{it.note || "-"}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              <div className="flex items-center justify-center space-x-1">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleStartEditAddedItem(it)}
+                                  className={`p-1 rounded-md transition-all cursor-pointer ${
+                                    isEditingThis 
+                                      ? "bg-amber-100 text-amber-700" 
+                                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                  }`}
+                                  title="แก้ไข"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDeleteAddedItem(it.id)}
+                                  className="p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-md transition-all cursor-pointer"
+                                  title="ลบ"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 pt-1">
+                <span>รวมรายจ่ายเสริมสะสมเดือนนี้:</span>
+                <span className="text-sm text-blue-600">
+                  {formatCurrency(addedItems.reduce((sum, item) => sum + item.amount, 0))}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

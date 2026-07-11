@@ -127,6 +127,7 @@ export default function App() {
   const [billAnnouncements, setBillAnnouncements] = useState<BillAnnouncement[]>([]);
   const [ownerInfo, setOwnerInfo] = useState<OwnerInfo>({ name: "", phone: "" });
   const [dashboardStats, setDashboardStats] = useState<any>(null);
+  const [addedItemsList, setAddedItemsList] = useState<AddedItem[]>([]);
 
   // Counter to notify real-time sheets database drawer of updates
   const [refreshSheetsTrigger, setRefreshSheetsTrigger] = useState<number>(0);
@@ -203,6 +204,7 @@ export default function App() {
     const loadedAnncs = getBillAnnouncements();
     const loadedOwnerInfo = getOwnerInfo();
     const loadedDashboard = getDashboardData(month);
+    const loadedAddedItems = getAllAddedItems().filter(it => it.month === month);
 
     setRooms(loadedRooms);
     setTenants(loadedTenants);
@@ -215,6 +217,7 @@ export default function App() {
     setBillAnnouncements(loadedAnncs);
     setOwnerInfo(loadedOwnerInfo);
     setDashboardStats(loadedDashboard);
+    setAddedItemsList(loadedAddedItems);
 
     setRefreshSheetsTrigger(prev => prev + 1);
   };
@@ -878,6 +881,9 @@ export default function App() {
                       selectedRoomIds: roomIds || []
                     });
                   }}
+                  onGetAddedItems={getAddedItems}
+                  onSaveAddedItem={handleSaveAddedItemWrapper}
+                  onDeleteAddedItem={handleDeleteAddedItemWrapper}
                 />
               )}
               {activeTab === "ai" && (
@@ -901,10 +907,13 @@ export default function App() {
                   bills={bills} 
                   month={month} 
                   metersList={metersList}
+                  addedItemsList={addedItemsList}
                   onDeleteMeter={handleDeleteMeterReading}
                   onUpdateMeter={handleUpdateMeterReading}
                   onDeletePayment={handleDeletePayment}
                   onUpdatePayment={handleUpdatePayment}
+                  onDeleteAddedItem={handleDeleteAddedItemWrapper}
+                  onSaveAddedItem={handleSaveAddedItemWrapper}
                 />
               )}
               {activeTab === "admin" && (

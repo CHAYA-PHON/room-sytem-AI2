@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Info, Save, PlusCircle, AlertCircle, X, Trash2 } from "lucide-react";
+import { Info, Save, PlusCircle, AlertCircle, X, Trash2, Edit2, Check } from "lucide-react";
 import { AddedItem } from "../types";
 
 interface MeterItem {
@@ -41,6 +41,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
   const [newItemName, setNewItemName] = useState("");
   const [newItemAmount, setNewItemAmount] = useState(0);
   const [newItemNote, setNewItemNote] = useState("");
+  const [editingItem, setEditingItem] = useState<AddedItem | null>(null);
 
   useEffect(() => {
     const unrecorded = list.filter(item => !item.isRecorded);
@@ -58,6 +59,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
 
   const handleOpenInlineModal = (roomId: string, roomName: string) => {
     setInlineModalRoom({ id: roomId, name: roomName });
+    setEditingItem(null);
     const items = onGetAddedItems(roomId, month);
     setInlineItems(items);
     setNewItemName("");
@@ -70,7 +72,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
     if (!inlineModalRoom || !newItemName.trim() || newItemAmount <= 0) return;
 
     onSaveAddedItem({
-      id: "",
+      id: editingItem ? editingItem.id : "",
       roomId: inlineModalRoom.id,
       month,
       name: newItemName.trim(),
@@ -81,6 +83,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
     // Refresh list
     const items = onGetAddedItems(inlineModalRoom.id, month);
     setInlineItems(items);
+    setEditingItem(null);
     setNewItemName("");
     setNewItemAmount(0);
     setNewItemNote("");
@@ -89,8 +92,28 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
   const handleDeleteInlineItem = (id: string) => {
     if (!inlineModalRoom) return;
     onDeleteAddedItem(id, inlineModalRoom.id, month);
+    if (editingItem && editingItem.id === id) {
+      setEditingItem(null);
+      setNewItemName("");
+      setNewItemAmount(0);
+      setNewItemNote("");
+    }
     const items = onGetAddedItems(inlineModalRoom.id, month);
     setInlineItems(items);
+  };
+
+  const handleStartEditAddedItem = (item: AddedItem) => {
+    setEditingItem(item);
+    setNewItemName(item.name);
+    setNewItemAmount(item.amount);
+    setNewItemNote(item.note || "");
+  };
+
+  const handleCancelEditAddedItem = () => {
+    setEditingItem(null);
+    setNewItemName("");
+    setNewItemAmount(0);
+    setNewItemNote("");
   };
 
 
@@ -305,13 +328,23 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
 
                       {/* Supplementary Added Services shortcut */}
                       <td className="px-6 py-4 text-center">
-                        <button 
-                          onClick={() => handleOpenInlineModal(item.roomId, item.roomName)}
-                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer hover:scale-105 active:scale-95"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5" />
-                          <span>จัดการค่าบริการเสริม</span>
-                        </button>
+                        {(() => {
+                          const hasItems = onGetAddedItems ? onGetAddedItems(item.roomId, month).length > 0 : false;
+                          const itemsCount = onGetAddedItems ? onGetAddedItems(item.roomId, month).length : 0;
+                          return (
+                            <button 
+                              onClick={() => handleOpenInlineModal(item.roomId, item.roomName)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer hover:scale-105 active:scale-95 ${
+                                hasItems 
+                                  ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200" 
+                                  : "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              <PlusCircle className={`w-3.5 h-3.5 ${hasItems ? "text-emerald-500" : "text-blue-500"}`} />
+                              <span>จัดการค่าบริการเสริม {hasItems && `(${itemsCount})`}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -329,7 +362,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
             <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-black text-slate-800">
-                  รายจ่ายเสริมอื่นๆ: ห้อง {roomNameFormat(inlineModalRoom.name)}
+                  {editingItem ? "✏️ แก้ไขรายจ่ายเสริมอื่นๆ" : "⚙️ รายจ่ายเสริมอื่นๆ"}: ห้อง {roomNameFormat(inlineModalRoom.name)}
                 </h3>
                 <p className="text-[10px] text-slate-400 font-semibold mt-0.5">รอบบริการทางการเงินประจำเดือน: {month}</p>
               </div>
@@ -342,8 +375,24 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Form to add item */}
-              <form onSubmit={handleAddInlineItem} className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-2.5">
+              {/* Form to add or edit item */}
+              <form onSubmit={handleAddInlineItem} className={`p-4 rounded-xl border space-y-2.5 transition-all ${
+                editingItem ? "bg-amber-50/60 border-amber-200" : "bg-slate-50 border-slate-150"
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-slate-700">
+                    {editingItem ? "กำลังแก้ไขข้อมูล:" : "เพิ่มรายการใหม่:"}
+                  </span>
+                  {editingItem && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditAddedItem}
+                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                    >
+                      ยกเลิกแก้ไข
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1">ชื่อเรียกรายจ่ายเสริม *</label>
@@ -378,13 +427,28 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
                     placeholder="รายละเอียดจำเพาะเจาะจง..."
                   />
                 </div>
-                <button 
-                  type="submit" 
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm shadow-blue-500/10"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>เพิ่มบันทึกรายจ่ายเสริม</span>
-                </button>
+                <div className="flex space-x-2">
+                  <button 
+                    type="submit" 
+                    className={`w-full py-2 text-white font-bold rounded-lg text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm ${
+                      editingItem 
+                        ? "bg-amber-600 hover:bg-amber-700 shadow-amber-500/10" 
+                        : "bg-blue-600 hover:bg-blue-700 shadow-blue-500/10"
+                    }`}
+                  >
+                    {editingItem ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>บันทึกการแก้ไข</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>เพิ่มบันทึกรายจ่ายเสริม</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
 
               {/* Added item rows table */}
@@ -395,7 +459,7 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
                       <th className="px-4 py-2 text-[10px]">ชื่อรายจ่าย</th>
                       <th className="px-4 py-2 text-[10px]">ราคา</th>
                       <th className="px-4 py-2 text-[10px]">หมายเหตุ</th>
-                      <th className="px-4 py-2 text-right text-[10px]">ลบ</th>
+                      <th className="px-4 py-2 text-center text-[10px] w-20">การจัดการ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -406,22 +470,45 @@ export default function Meters({ list, month, onSaveBatch, onGetAddedItems, onSa
                         </td>
                       </tr>
                     ) : (
-                      inlineItems.map(it => (
-                        <tr key={it.id} className="border-b border-slate-100 text-xs text-slate-700">
-                          <td className="px-4 py-2.5 font-bold">{it.name}</td>
-                          <td className="px-4 py-2.5 font-bold text-blue-600">{formatCurrency(it.amount)}</td>
-                          <td className="px-4 py-2.5 text-slate-400 truncate max-w-[100px]">{it.note || "-"}</td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button 
-                              onClick={() => handleDeleteInlineItem(it.id)}
-                              className="p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-700 rounded-md transition-all cursor-pointer"
-                              title="ลบ"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      inlineItems.map(it => {
+                        const isEditingThis = editingItem?.id === it.id;
+                        return (
+                          <tr key={it.id} className={`border-b border-slate-100 text-xs transition-colors ${
+                            isEditingThis ? "bg-amber-50/50" : "text-slate-700 hover:bg-slate-50/50"
+                          }`}>
+                            <td className="px-4 py-2.5 font-bold">
+                              {isEditingThis && <span className="text-amber-600 mr-1">●</span>}
+                              {it.name}
+                            </td>
+                            <td className="px-4 py-2.5 font-bold text-blue-600">{formatCurrency(it.amount)}</td>
+                            <td className="px-4 py-2.5 text-slate-400 truncate max-w-[100px]">{it.note || "-"}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              <div className="flex items-center justify-center space-x-1">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleStartEditAddedItem(it)}
+                                  className={`p-1 rounded-md transition-all cursor-pointer ${
+                                    isEditingThis 
+                                      ? "bg-amber-100 text-amber-700" 
+                                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                  }`}
+                                  title="แก้ไข"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDeleteInlineItem(it.id)}
+                                  className="p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-md transition-all cursor-pointer"
+                                  title="ลบ"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

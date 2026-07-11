@@ -5,17 +5,20 @@
 
 import React, { useState } from "react";
 import { Receipt, Calendar, User, Info, DollarSign, Gauge, Edit2, Trash2, Save, X } from "lucide-react";
-import { PaymentRecord, Bill } from "../types";
+import { PaymentRecord, Bill, AddedItem } from "../types";
 
 interface PaymentHistoryProps {
   payments: PaymentRecord[];
   bills: Bill[];
   month: string;
   metersList?: any[];
+  addedItemsList?: AddedItem[];
   onDeleteMeter?: (roomId: string) => void;
   onUpdateMeter?: (item: any) => void;
   onDeletePayment?: (payId: string) => void;
   onUpdatePayment?: (payId: string, updatedFields: Partial<PaymentRecord>) => void;
+  onDeleteAddedItem?: (id: string, roomId: string, month: string) => void;
+  onSaveAddedItem?: (item: AddedItem) => void;
 }
 
 export default function PaymentHistory({ 
@@ -23,12 +26,15 @@ export default function PaymentHistory({
   bills, 
   month, 
   metersList = [], 
+  addedItemsList = [],
   onDeleteMeter, 
   onUpdateMeter,
   onDeletePayment,
-  onUpdatePayment
+  onUpdatePayment,
+  onDeleteAddedItem,
+  onSaveAddedItem
 }: PaymentHistoryProps) {
-  const [subTab, setSubTab] = useState<"payments" | "meters">("payments");
+  const [subTab, setSubTab] = useState<"payments" | "meters" | "added_items">("payments");
 
   // Editing state for payments
   const [editingPayId, setEditingPayId] = useState<string | null>(null);
@@ -44,6 +50,44 @@ export default function PaymentHistory({
   const [editPrevElec, setEditPrevElec] = useState<string | number>("");
   const [editCurrElec, setEditCurrElec] = useState<string | number>("");
   const [editNote, setEditNote] = useState<string>("");
+
+  // Editing state for added items
+  const [editingAddedId, setEditingAddedId] = useState<string | null>(null);
+  const [editAddedName, setEditAddedName] = useState<string>("");
+  const [editAddedAmount, setEditAddedAmount] = useState<string | number>("");
+  const [editAddedNote, setEditAddedNote] = useState<string>("");
+
+  const startEditAddedItem = (item: AddedItem) => {
+    setEditingAddedId(item.id);
+    setEditAddedName(item.name);
+    setEditAddedAmount(item.amount);
+    setEditAddedNote(item.note || "");
+  };
+
+  const handleSaveEditAddedItem = (item: AddedItem) => {
+    const amt = Number(editAddedAmount);
+    if (!editAddedName.trim() || isNaN(amt) || amt <= 0) {
+      alert("กรุณาระบุชื่อและราคาให้ถูกต้อง");
+      return;
+    }
+
+    onSaveAddedItem?.({
+      id: item.id,
+      roomId: item.roomId,
+      month: item.month,
+      name: editAddedName.trim(),
+      amount: amt,
+      note: editAddedNote.trim()
+    });
+
+    setEditingAddedId(null);
+  };
+
+  const handleDeleteAddedItem = (id: string, roomId: string, monthStr: string) => {
+    if (window.confirm("⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบรายการรายจ่ายเสริมนี้?")) {
+      onDeleteAddedItem?.(id, roomId, monthStr);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB" }).format(amount);
@@ -125,7 +169,7 @@ export default function PaymentHistory({
       </div>
 
       {/* Segmented Sub-tab control */}
-      <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl w-fit">
         <button
           onClick={() => setSubTab("payments")}
           className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
@@ -148,9 +192,20 @@ export default function PaymentHistory({
           <Gauge className="w-3.5 h-3.5" />
           <span>ประวัติจดมิเตอร์น้ำ-ไฟ ({recordedMeters.length})</span>
         </button>
+        <button
+          onClick={() => setSubTab("added_items")}
+          className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+            subTab === "added_items" 
+              ? "bg-white text-slate-900 shadow-sm" 
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5" />
+          <span>ประวัติรายจ่ายเสริม ({addedItemsList.length})</span>
+        </button>
       </div>
 
-      {subTab === "payments" ? (
+      {subTab === "payments" && (
         <div key="payments-history-tab" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -295,7 +350,9 @@ export default function PaymentHistory({
             </table>
           </div>
         </div>
-      ) : (
+      )}
+
+      {subTab === "meters" && (
         <div key="meters-history-tab" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -436,6 +493,131 @@ export default function PaymentHistory({
                                 onClick={() => onDeleteMeter?.(item.roomId)}
                                 className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-all cursor-pointer"
                                 title="ลบข้อมูลมิเตอร์"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {subTab === "added_items" && (
+        <div key="added-items-history-tab" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-400 text-xs font-bold uppercase border-b border-slate-100">
+                  <th className="px-6 py-4">ห้อง</th>
+                  <th className="px-6 py-4">ชื่อรายการรายจ่ายเสริม</th>
+                  <th className="px-6 py-4 text-right">จำนวนเงิน</th>
+                  <th className="px-6 py-4">หมายเหตุ</th>
+                  <th className="px-6 py-4 text-center">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-700 text-sm">
+                {addedItemsList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      ยังไม่มีรายการบันทึกรายจ่ายเสริมใด ๆ ในรอบเดือนนี้
+                    </td>
+                  </tr>
+                ) : (
+                  [...addedItemsList].map(item => {
+                    const isEditing = editingAddedId === item.id;
+                    const roomName = item.roomId.replace("R", "");
+
+                    return (
+                      <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        {/* Room Info */}
+                        <td className="px-6 py-4 font-extrabold text-slate-800">
+                          ห้อง {roomName}
+                        </td>
+
+                        {/* Item Name */}
+                        <td className="px-6 py-4">
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={editAddedName}
+                              onChange={(e) => setEditAddedName(e.target.value)}
+                              className="px-2 py-1 border border-blue-200 bg-blue-50/30 rounded text-xs font-bold focus:ring-2 focus:ring-blue-500 w-full max-w-xs"
+                              placeholder="ชื่อรายการ"
+                            />
+                          ) : (
+                            <span className="font-semibold text-slate-700">{item.name}</span>
+                          )}
+                        </td>
+
+                        {/* Amount */}
+                        <td className="px-6 py-4 text-right font-mono">
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              value={editAddedAmount}
+                              onChange={(e) => setEditAddedAmount(e.target.value)}
+                              className="px-2 py-1 border border-blue-200 bg-blue-50/30 rounded text-xs font-bold text-right font-mono focus:ring-2 focus:ring-blue-500 w-24"
+                              placeholder="จำนวนเงิน"
+                            />
+                          ) : (
+                            <span className="text-emerald-600 font-extrabold">{formatCurrency(item.amount)}</span>
+                          )}
+                        </td>
+
+                        {/* Note */}
+                        <td className="px-6 py-4">
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={editAddedNote}
+                              onChange={(e) => setEditAddedNote(e.target.value)}
+                              className="px-2 py-1 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 w-full"
+                              placeholder="หมายเหตุเพิ่มเติม..."
+                            />
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold">{item.note || "-"}</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-center">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center space-x-2">
+                              <button 
+                                onClick={() => handleSaveEditAddedItem(item)}
+                                className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors cursor-pointer"
+                                title="บันทึกที่แก้ไข"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                onClick={() => setEditingAddedId(null)}
+                                className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg transition-colors cursor-pointer"
+                                title="ยกเลิกแก้ไข"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center space-x-2">
+                              <button 
+                                onClick={() => startEditAddedItem(item)}
+                                className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-all cursor-pointer"
+                                title="แก้ไข"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteAddedItem(item.id, item.roomId, item.month)}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-all cursor-pointer"
+                                title="ลบรายการ"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
