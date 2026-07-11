@@ -201,21 +201,58 @@ function applyPulledData(data: any) {
   Object.entries(tables).forEach(([apiKey, localKey]) => {
     if (data[apiKey] && Array.isArray(data[apiKey])) {
       let array = data[apiKey];
-      // Normalize monthly and date strings depending on the entity type
-      if (apiKey === "meters") {
+      // Normalize and sanitize fields depending on the entity type to guarantee strict types
+      if (apiKey === "rooms") {
+        array = array.map((r: any) => ({
+          ...r,
+          rent: Number(r.rent) || 0,
+          minWater: Number(r.minWater) || 0,
+          minElec: Number(r.minElec) || 0
+        }));
+      } else if (apiKey === "meters") {
         array = array.map((m: any) => ({ 
           ...m, 
           month: normalizeMonth(m.month),
-          recordedDate: m.recordedDate ? normalizeDate(m.recordedDate) : undefined
+          recordedDate: m.recordedDate ? normalizeDate(m.recordedDate) : undefined,
+          prevWater: Number(m.prevWater) || 0,
+          currWater: Number(m.currWater) || 0,
+          prevElec: Number(m.prevElec) || 0,
+          currElec: Number(m.currElec) || 0
         }));
       } else if (apiKey === "added_items") {
-        array = array.map((it: any) => ({ ...it, month: normalizeMonth(it.month) }));
+        array = array.map((it: any) => ({ 
+          ...it, 
+          month: normalizeMonth(it.month),
+          amount: Number(it.amount) || 0
+        }));
       } else if (apiKey === "bills") {
-        array = array.map((b: any) => ({ ...b, month: normalizeMonth(b.month) }));
+        array = array.map((b: any) => ({ 
+          ...b, 
+          month: normalizeMonth(b.month),
+          waterUnits: Number(b.waterUnits) || 0,
+          waterCost: Number(b.waterCost) || 0,
+          elecUnits: Number(b.elecUnits) || 0,
+          elecCost: Number(b.elecCost) || 0,
+          rentCost: Number(b.rentCost) || 0,
+          addedCost: Number(b.addedCost) || 0,
+          prevUnpaid: Number(b.prevUnpaid) || 0,
+          total: Number(b.total) || 0,
+          paid: Number(b.paid) || 0,
+          balance: Number(b.balance) || 0
+        }));
       } else if (apiKey === "tenants") {
-        array = array.map((t: any) => ({ ...t, startDate: normalizeDate(t.startDate) }));
+        array = array.map((t: any) => ({ 
+          ...t, 
+          startDate: normalizeDate(t.startDate),
+          startWater: Number(t.startWater) || 0,
+          startElec: Number(t.startElec) || 0
+        }));
       } else if (apiKey === "payments") {
-        array = array.map((p: any) => ({ ...p, date: normalizeDate(p.date) }));
+        array = array.map((p: any) => ({ 
+          ...p, 
+          date: normalizeDate(p.date),
+          amount: Number(p.amount) || 0
+        }));
       }
       localStorage.setItem(localKey, JSON.stringify(array));
     }

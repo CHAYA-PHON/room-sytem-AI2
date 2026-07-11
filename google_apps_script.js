@@ -15,35 +15,35 @@
  * 9. คัดลอก URL ของเว็บแอปที่ได้ (จะลงท้ายด้วย /exec) นำไปใส่ในเมนู "ตั้งค่าแอดมิน" ในเว็บแอป Sabaidee Dorm แล้วเริ่มซิงค์ข้อมูลได้เลย!
  */
 
-// ตารางข้อมูลและหัวข้อคอลัมน์ทั้งหมดของระบบ
+// ตารางข้อมูลและหัวข้อคอลัมน์ทั้งหมดของระบบ ให้ตรงกับโครงสร้าง TypeScript ของหน้าบ้าน 100% เพื่อไม่ให้ข้อมูลสูญหายหรือเสียหาย
 const SHEETS_CONFIG = {
   rooms: {
     sheetName: "Rooms",
-    headers: ["id", "name", "status", "notes", "tenantId", "monthlyRent"]
+    headers: ["id", "name", "rent", "minWater", "minElec", "payMethod", "bankId", "note"]
   },
   tenants: {
     sheetName: "Tenants",
-    headers: ["id", "name", "phone", "idCard", "startDate", "status"]
+    headers: ["roomId", "name", "phone", "startDate", "startWater", "startElec", "status"]
   },
   meters: {
     sheetName: "Meters",
-    headers: ["id", "roomId", "month", "waterValue", "electricityValue", "recordedDate"]
+    headers: ["meterId", "roomId", "month", "prevWater", "currWater", "prevElec", "currElec", "note", "recordedBy", "recordedDate"]
   },
   added_items: {
     sheetName: "Added_Items",
-    headers: ["id", "roomId", "month", "name", "amount", "isMultiplier", "unitPrice"]
+    headers: ["id", "roomId", "month", "name", "amount", "note"]
   },
   bills: {
     sheetName: "Bills",
-    headers: ["id", "roomId", "month", "waterCost", "electricityCost", "rentCost", "addedItemsCost", "totalAmount", "isPaid", "paidDate"]
+    headers: ["billId", "roomId", "roomName", "tenantName", "month", "waterUnits", "waterCost", "elecUnits", "elecCost", "rentCost", "addedCost", "prevUnpaid", "total", "paid", "balance", "status", "createdDate"]
   },
   banks: {
     sheetName: "Banks",
-    headers: ["id", "bankName", "accountNumber", "accountHolder", "qrCodeUrl"]
+    headers: ["id", "bankName", "accountNumber", "accountName", "footerNote"]
   },
   payments: {
     sheetName: "Payments",
-    headers: ["id", "billId", "amount", "date", "time", "proofUrl", "status", "notes"]
+    headers: ["payId", "billId", "date", "amount", "method", "receiver", "note"]
   },
   admins: {
     sheetName: "Admins",

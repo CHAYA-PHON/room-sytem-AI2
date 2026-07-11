@@ -20,7 +20,8 @@ import {
   ChevronLeft,
   Info,
   Layers,
-  Database
+  Database,
+  Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -37,8 +38,10 @@ import {
   saveBankAccount,
   deleteBankAccount,
   getMeterEntryList,
+  getMeters,
   saveMetersBatch,
   deleteMeterReading,
+  getBills,
   getBillsList,
   recalcBill,
   getPaymentHistory,
@@ -76,6 +79,7 @@ import Banks from "./components/Banks";
 import PaymentHistory from "./components/PaymentHistory";
 import AdminSettings from "./components/AdminSettings";
 import PrintPreview from "./components/PrintPreview";
+import AIAnalytics from "./components/AIAnalytics";
 
 // Import Google Sheets sync service
 import { 
@@ -171,8 +175,7 @@ export default function App() {
     }
 
     // Auto pull from Google Sheets immediately on app open or reboot/reload!
-    // Skip auto-pull if using the default placeholder URL to avoid unnecessary/failing network requests
-    if (initialUrl && initialUrl !== DEFAULT_GS_URL) {
+    if (initialUrl) {
       const autoPullOnLoad = async () => {
         setIsSyncing(true);
         console.log("App startup: Automatically pulling latest database from Google Sheets...");
@@ -555,6 +558,7 @@ export default function App() {
     { id: "tenants", label: "สัญญาผู้เช่าอาศัย", icon: Users },
     { id: "meters", label: "จดจดมิเตอร์กลุ่ม", icon: Gauge },
     { id: "bills", label: "บิลสรุปประจำงวด", icon: FileSpreadsheet },
+    { id: "ai", label: "วิเคราะห์อัจฉริยะ AI", icon: Sparkles },
     { id: "banks", label: "บัญชีรับโอนฝาก", icon: DollarSign },
     { id: "payments", label: "ประวัติทำรายการ", icon: History },
     { id: "admin", label: "ตั้งค่าแอดมิน", icon: Settings }
@@ -872,6 +876,14 @@ export default function App() {
                       selectedRoomIds: roomIds || []
                     });
                   }}
+                />
+              )}
+              {activeTab === "ai" && (
+                <AIAnalytics 
+                  rooms={rooms}
+                  bills={getBills()}
+                  meters={getMeters()}
+                  payments={getPaymentHistory()}
                 />
               )}
               {activeTab === "banks" && (
