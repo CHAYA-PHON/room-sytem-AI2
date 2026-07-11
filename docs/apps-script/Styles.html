@@ -1,0 +1,171 @@
+<!-- Styles.html -->
+<style>
+  /* นำเข้าฟอนต์และเซ็ตอัปพื้นฐาน */
+  :root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+  }
+
+  /* ตกแต่ง Sidebar และเมนูนำทาง */
+  .nav-item {
+    color: #94a3b8;
+  }
+  .nav-item:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  .nav-item.active {
+    color: #ffffff;
+    background-color: var(--primary);
+  }
+
+  /* ปรับแต่งความลื่นไหลในการเลื่อนหน้าจอ */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* ปิดกั้นฟอร์มคีย์บอร์ดซ้ำซ้อนและปุ่มกด */
+  button:active {
+    transform: scale(0.98);
+  }
+
+  /* ==========================================================================
+     PRINT STYLING (ระบบการจัดหน้าสำหรับพิมพ์ใบแจ้งหนี้ และสรุปประจำเดือน)
+     ========================================================================== */
+  
+  /* สร้างคลาสจำลองสำหรับ Preview หน้าจอ เพื่อให้ พรีวิว = พิมพ์จริง 100% */
+  .a4-container {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 10mm;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+    border-radius: 8px;
+  }
+
+  .a4-container-landscape {
+    width: 297mm;
+    min-height: 210mm;
+    padding: 10mm;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+    border-radius: 8px;
+  }
+
+  /* ปรับแก้ช่องว่างเมื่อพรีวิวในหน้าต่าง modal */
+  .modal-print-preview {
+    max-height: 85vh;
+    overflow-y: auto;
+    background: #475569;
+    padding: 20px;
+  }
+
+  /* การพิมพ์จริง */
+  @media print {
+    /* ซ่อนโครงสร้างเว็บทั้งหมดที่ไม่เกี่ยวกับงานพิมพ์ */
+    body, #appView, #loginView, #toast, .modal-backdrop, header, aside {
+      display: none !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    /* แสดงผลเฉพาะ Container งานพิมพ์เท่านั้น */
+    #printSection {
+      display: block !important;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    /* ปรับแต่งกระดาษ */
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    .print-landscape-mode {
+      @page {
+        size: A4 landscape;
+        margin: 0;
+      }
+    }
+
+    /* ล้างเงาและการแสดงผลสไตล์จอภาพ */
+    .a4-container, .a4-container-landscape {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 100% !important;
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 !important;
+      padding: 10mm !important;
+      page-break-inside: avoid;
+    }
+
+    /* สั่งแบ่งหน้าตามใบแจ้งหนี้ */
+    .invoice-item-print {
+      page-break-inside: avoid;
+      border-bottom: 1px dashed #64748b !important;
+    }
+
+    .page-break {
+      page-break-after: always !important;
+    }
+
+    /* รักษาความชัดเจนของสีสันตอนพิมพ์ */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+
+  /* จัดเรียงใบแจ้งหนี้ 3 ใบใน 1 หน้าของ A4 */
+  .invoice-card-triple {
+    height: 90mm; /* 297mm / 3 = 99mm หักล้างส่วนเว้นระยะ */
+    border: 1px solid #e2e8f0;
+    padding: 4mm 6mm;
+    margin-bottom: 3mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    font-size: 11px;
+  }
+  .invoice-card-triple:nth-child(3n) {
+    margin-bottom: 0;
+    page-break-after: always;
+  }
+
+  /* หมวดหมู่สีบิลสถานะ */
+  .status-badge-paid {
+    background-color: #dcfce7;
+    color: #15803d;
+  }
+  .status-badge-partial {
+    background-color: #fef9c3;
+    color: #a16207;
+  }
+  .status-badge-unpaid {
+    background-color: #fee2e2;
+    color: #b91c1c;
+  }
+</style>

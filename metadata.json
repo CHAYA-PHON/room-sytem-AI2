@@ -1,0 +1,6 @@
+{
+  "name": "ระบบจัดการหอพัก (Dormitory Management)",
+  "description": "ระบบจัดการหอพักที่ขับเคลื่อนด้วย Google Apps Script และ Google Sheets พร้อมพรีวิวตัวอย่างใช้งานจริง จัดการผู้เช่า มิเตอร์น้ำ-ไฟ คำนวณบิลด้วยระบบ FIFO และพิมพ์เอกสาร A4",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

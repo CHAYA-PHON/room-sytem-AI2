@@ -1,0 +1,2061 @@
+<!-- App.html -->
+<script>
+  // ตัวแปรและสถานะระบบหลัก (Client State)
+  const STATE = {
+    user: null,
+    currentTab: "dashboard",
+    month: "", // รูปแบบ YYYY-MM
+    rooms: [],
+    tenants: [],
+    banks: [],
+    metersList: [],
+    billsList: []
+  };
+
+  // เริ่มต้นทำงานเมื่อหน้าเว็บพร้อม
+  document.addEventListener("DOMContentLoaded", () => {
+    initDefaultMonth();
+    setupEventListeners();
+    checkSession();
+    lucide.createIcons();
+  });
+
+  // กำหนดค่าเริ่มต้นรอบเดือนเป็นเดือนปัจจุบัน
+  function initDefaultMonth() {
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    STATE.month = `${yyyy}-${mm}`;
+    document.getElementById("globalMonthPicker").value = STATE.month;
+  }
+
+  // ตัวกรองรอบเดือนส่วนกลางที่มีผลทั่วระบบ เมื่อแก้ไขจะโหลดข้อมูลแท็บปัจจุบันใหม่
+  document.getElementById("globalMonthPicker").addEventListener("change", (e) => {
+    STATE.month = e.target.value;
+    showToast("calendar", "blue", `เปลี่ยนรอบเดือนเป็น ${STATE.month}`);
+    refreshCurrentTab();
+  });
+
+  // เช็คสถานะล็อกอินจาก localStorage
+  function checkSession() {
+    const storedUser = localStorage.getItem("dorm_admin_session");
+    if (storedUser) {
+      try {
+        STATE.user = JSON.parse(storedUser);
+        document.getElementById("loginView").classList.add("hidden");
+        document.getElementById("appView").classList.remove("hidden");
+        document.getElementById("adminUserName").innerText = STATE.user.username;
+        document.getElementById("avatarName").innerText = STATE.user.username.charAt(0).toUpperCase();
+        
+        // โหลดข้อมูลเข้าสู่ระบบ
+        handleTabRouting();
+      } catch (e) {
+        logout();
+      }
+    } else {
+      document.getElementById("loginView").classList.remove("hidden");
+      document.getElementById("appView").classList.add("hidden");
+    }
+  }
+
+  // ล็อกเอาท์ออกจากระบบ
+  function logout() {
+    localStorage.removeItem("dorm_admin_session");
+    STATE.user = null;
+    document.getElementById("loginView").classList.remove("hidden");
+    document.getElementById("appView").classList.add("hidden");
+    showToast("log-out", "rose", "ออกจากระบบเรียบร้อย");
+  }
+
+  // ผูกการดักฟังเหตุการณ์ปุ่มกดต่าง ๆ
+  function setupEventListeners() {
+    // ฟอร์มเข้าสู่ระบบ
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const user = document.getElementById("loginUser").value.trim();
+      const pin = document.getElementById("loginPin").value.trim();
+      
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          if (res.success) {
+            localStorage.setItem("dorm_admin_session", JSON.stringify(res.user));
+            checkSession();
+            showToast("shield-check", "green", `ยินดีต้อนรับคุณ ${res.user.username}`);
+          } else {
+            showToast("alert-circle", "red", res.message);
+          }
+        })
+        .withFailureHandler((err) => {
+          hideLoader();
+          showToast("alert-triangle", "red", "เกิดข้อผิดพลาดในการเชื่อมต่อ: " + err.message);
+        })
+        .loginUser(user, pin);
+    });
+
+    // ปุ่มสลับเมนู Sidebar มือถือ
+    document.getElementById("openSidebarBtn").addEventListener("click", () => {
+      document.getElementById("sidebar").classList.remove("-translate-x-full");
+      document.getElementById("sidebar").classList.add("translate-x-0");
+    });
+    document.getElementById("closeSidebarBtn").addEventListener("click", () => {
+      document.getElementById("sidebar").classList.add("-translate-x-full");
+    });
+
+    // ปุ่มเมนูต่าง ๆ บน Sidebar
+    document.querySelectorAll("#mainNav a").forEach(link => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const tab = link.getAttribute("data-tab");
+        window.location.hash = tab;
+        
+        // สำหรับมือถือ: ซ่อนเมนูหลังกดเลือก
+        if (window.innerWidth < 768) {
+          document.getElementById("sidebar").classList.add("-translate-x-full");
+        }
+      });
+    });
+
+    // ตรวจจับการเปลี่ยนแฮชเพื่อทำเราเตอร์
+    window.addEventListener("hashchange", handleTabRouting);
+
+    // ปุ่มออกจากระบบ
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+  }
+
+  // จัดการการเปลี่ยนแท็บตาม URL Hash
+  function handleTabRouting() {
+    let hash = window.location.hash.substring(1);
+    if (!hash) hash = "dashboard";
+    
+    STATE.currentTab = hash;
+    
+    // ไฮไลต์ปุ่มในเมนูข้าง
+    document.querySelectorAll("#mainNav a").forEach(link => {
+      if (link.getAttribute("data-tab") === hash) {
+        link.classList.add("active");
+        link.classList.remove("text-slate-400");
+      } else {
+        link.classList.remove("active");
+        link.classList.add("text-slate-400");
+      }
+    });
+
+    // เปลี่ยนหัวเรื่องด้านบน
+    const titleMap = {
+      dashboard: "แดชบอร์ดสรุปผลประจำรอบ",
+      rooms: "ระบบจัดการห้องพัก",
+      tenants: "ระบบจัดการผู้เช่า",
+      meters: "จดมิเตอร์น้ำและค่าไฟประจำรอบ",
+      bills: "คำนวณบิลและจัดการค่าใช้จ่าย",
+      banks: "ตั้งค่าบัญชีธนาคารและหมายเหตุ",
+      history: "ประวัติการชำระเงิน",
+      admin: "ตั้งค่าผู้ดูแลระบบ"
+    };
+    document.getElementById("currentTabTitle").innerText = titleMap[hash] || "ระบบจัดการหอพัก";
+    
+    // โหลดข้อมูลตามแท็บ
+    refreshCurrentTab();
+  }
+
+  // ฟังก์ชันดึงและอัปเดตข้อมูลแท็บปัจจุบัน
+  function refreshCurrentTab() {
+    showLoader();
+    const container = document.getElementById("contentContainer");
+    
+    switch (STATE.currentTab) {
+      case "dashboard":
+        google.script.run
+          .withSuccessHandler((data) => {
+            hideLoader();
+            renderDashboard(data);
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getDashboardData(STATE.month);
+        break;
+        
+      case "rooms":
+        google.script.run
+          .withSuccessHandler((rooms) => {
+            google.script.run
+              .withSuccessHandler((banks) => {
+                hideLoader();
+                STATE.rooms = rooms;
+                STATE.banks = banks;
+                renderRooms(rooms, banks);
+              })
+              .withFailureHandler((err) => handleError(err))
+              .getBankAccounts();
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getRooms();
+        break;
+
+      case "tenants":
+        google.script.run
+          .withSuccessHandler((tenants) => {
+            google.script.run
+              .withSuccessHandler((rooms) => {
+                hideLoader();
+                STATE.tenants = tenants;
+                STATE.rooms = rooms;
+                renderTenants(tenants, rooms);
+              })
+              .withFailureHandler((err) => handleError(err))
+              .getRooms();
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getTenants();
+        break;
+
+      case "meters":
+        google.script.run
+          .withSuccessHandler((list) => {
+            hideLoader();
+            STATE.metersList = list;
+            renderMeters(list);
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getMeterEntryList(STATE.month);
+        break;
+
+      case "bills":
+        google.script.run
+          .withSuccessHandler((bills) => {
+            google.script.run
+              .withSuccessHandler((banks) => {
+                google.script.run
+                  .withSuccessHandler((rooms) => {
+                    hideLoader();
+                    STATE.billsList = bills;
+                    STATE.banks = banks;
+                    STATE.rooms = rooms;
+                    renderBills(bills, banks, rooms);
+                  })
+                  .withFailureHandler((err) => handleError(err))
+                  .getRooms();
+              })
+              .withFailureHandler((err) => handleError(err))
+              .getBankAccounts();
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getBillsList(STATE.month);
+        break;
+
+      case "banks":
+        google.script.run
+          .withSuccessHandler((banks) => {
+            hideLoader();
+            STATE.banks = banks;
+            renderBanks(banks);
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getBankAccounts();
+        break;
+
+      case "history":
+        google.script.run
+          .withSuccessHandler((payments) => {
+            hideLoader();
+            renderHistory(payments);
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getPaymentHistory(STATE.month);
+        break;
+
+      case "admin":
+        google.script.run
+          .withSuccessHandler((admins) => {
+            hideLoader();
+            renderAdmins(admins);
+          })
+          .withFailureHandler((err) => handleError(err))
+          .getAdmins();
+        break;
+
+      default:
+        hideLoader();
+        container.innerHTML = `<div class="p-8 text-center text-slate-500">ไม่พบหน้านี้</div>`;
+    }
+  }
+
+  // จัดการข้อผิดพลาดและแสดง Toast แดง
+  function handleError(err) {
+    hideLoader();
+    showToast("alert-triangle", "red", "เกิดข้อผิดพลาด: " + err.message);
+    console.error(err);
+  }
+
+  // ฟังก์ชันแสดง/ซ่อนสปินเนอร์ตอนรอ API
+  function showLoader() {
+    const loader = document.getElementById("mainLoader");
+    if (!loader) {
+      const el = document.createElement("div");
+      el.id = "mainLoader";
+      el.className = "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/10 backdrop-blur-[1px]";
+      el.innerHTML = `
+        <div class="bg-white p-4 rounded-2xl shadow-lg flex items-center space-x-3 border border-slate-100">
+          <div class="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
+          <span class="text-sm font-semibold text-slate-700">กำลังประมวลผลระบบคลาวด์...</span>
+        </div>
+      `;
+      document.body.appendChild(el);
+    }
+  }
+
+  function hideLoader() {
+    const loader = document.getElementById("mainLoader");
+    if (loader) loader.remove();
+  }
+
+  // ฟังก์ชันทำ Toast มุมล่างขวา
+  function showToast(icon, color, text) {
+    const toast = document.getElementById("toast");
+    const toastIcon = document.getElementById("toastIcon");
+    const toastMsg = document.getElementById("toastMsg");
+    
+    // ตั้งค่าไอคอนและสีสัน
+    let iconClass = `text-${color}-500 bg-${color}-50`;
+    if (color === 'red') iconClass = "text-rose-500 bg-rose-50";
+    if (color === 'green') iconClass = "text-emerald-500 bg-emerald-50";
+    if (color === 'blue') iconClass = "text-blue-500 bg-blue-50";
+    
+    toastIcon.className = `p-2 rounded-xl ${iconClass}`;
+    toastIcon.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i>`;
+    toastMsg.innerText = text;
+    
+    lucide.createIcons();
+    
+    toast.classList.remove("translate-y-10", "opacity-0", "pointer-events-none");
+    toast.classList.add("translate-y-0", "opacity-100");
+    
+    setTimeout(() => {
+      toast.classList.remove("translate-y-0", "opacity-100");
+      toast.classList.add("translate-y-10", "opacity-0", "pointer-events-none");
+    }, 4000);
+  }
+
+  // สกุลเงินจัดรูปแบบไทย
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
+  }
+
+  // ฟังก์ชันช่วยเหลือเปิด/ปิด modal
+  function openModal(id, htmlContent) {
+    let modal = document.getElementById(id);
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = id;
+      modal.className = "fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm";
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = htmlContent;
+    modal.classList.remove("hidden");
+    lucide.createIcons();
+  }
+
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.add("hidden");
+  }
+
+  /* ==========================================================================
+     RENDER FUNCTIONS (พิมพ์หน้าตาของระบบแต่ละส่วน)
+     ========================================================================== */
+
+  // 1. แดชบอร์ด (Dashboard)
+  function renderDashboard(data) {
+    const container = document.getElementById("contentContainer");
+    
+    // ดึงรายชื่อห้องทั้งหมดเพื่อแสดง Grid สถานะห้องพัก
+    let roomsGridHTML = "";
+    if (data.roomList && data.roomList.length > 0) {
+      data.roomList.forEach(room => {
+        const isRented = room.status === "มีผู้เช่า";
+        roomsGridHTML += `
+          <div class="p-4 rounded-2xl bg-white border border-slate-150 flex items-center justify-between shadow-sm">
+            <div>
+              <span class="text-lg font-bold text-slate-800">${room.name}</span>
+              <p class="text-xs text-slate-400 mt-0.5">เช่า: ${formatCurrency(room.rent)}</p>
+            </div>
+            <span class="px-2.5 py-1 text-xs font-semibold rounded-lg ${isRented ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'}">
+              ${room.status}
+            </span>
+          </div>
+        `;
+      });
+    } else {
+      roomsGridHTML = `<div class="col-span-full py-8 text-center text-slate-400 text-sm">ยังไม่มีห้องพักในระบบ</div>`;
+    }
+
+    container.innerHTML = `
+      <!-- สรุปตัวเลขสถิติแบบกล่อง (Bento Layout) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-blue-50 rounded-xl text-blue-600">
+            <i data-lucide="door-open" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs font-medium text-slate-400 uppercase">สถานะห้องพัก</div>
+            <div class="text-2xl font-bold text-slate-800">${data.rentedRooms} / ${data.totalRooms}</div>
+            <p class="text-xs text-slate-500 mt-0.5">มีผู้เช่า (ว่าง ${data.vacantRooms})</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+            <i data-lucide="calculator" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs font-medium text-slate-400 uppercase">ประมาณการบิลทั้งหมด</div>
+            <div class="text-2xl font-bold text-slate-800">${formatCurrency(data.monthlyTotal)}</div>
+            <p class="text-xs text-slate-500 mt-0.5">รอบเดือน ${STATE.month}</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-teal-50 rounded-xl text-teal-600">
+            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs font-medium text-slate-400 uppercase">ชำระเงินแล้ว</div>
+            <div class="text-2xl font-bold text-slate-800 text-emerald-600">${formatCurrency(data.monthlyPaid)}</div>
+            <p class="text-xs text-slate-500 mt-0.5">รับเงินแล้วในเดือนนี้</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-rose-50 rounded-xl text-rose-600 animate-pulse">
+            <i data-lucide="circle-alert" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs font-medium text-rose-500 uppercase font-bold">ยอดค้างสะสมจริง</div>
+            <div class="text-2xl font-bold text-rose-600">${formatCurrency(data.totalOutstandingUnpaid)}</div>
+            <p class="text-xs text-slate-500 mt-0.5">รวมทุกเดือนค้างทั้งหมด</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- รายละเอียดแยกห้องพักและสถานะปัจจุบัน -->
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden p-6">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+          <h3 class="text-base font-bold text-slate-800 flex items-center">
+            <i data-lucide="building-2" class="w-5 h-5 text-blue-500 mr-2"></i> แผนผังจำลองและสถานะห้องพักทั้งหมด
+          </h3>
+          <span class="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg border border-slate-200">ทั้งหมด ${data.totalRooms} ห้อง</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          ${roomsGridHTML}
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // 2. จัดการห้องพัก (Rooms Tab)
+  function renderRooms(rooms, banks) {
+    const container = document.getElementById("contentContainer");
+    
+    let roomsTableHTML = "";
+    rooms.forEach(r => {
+      const bank = banks.find(b => b.id === r.bankId);
+      roomsTableHTML += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50/55 transition-colors">
+          <td class="px-6 py-4 font-bold text-slate-800">${r.name}</td>
+          <td class="px-6 py-4 text-sm font-semibold">${formatCurrency(r.rent)}</td>
+          <td class="px-6 py-4 text-xs text-slate-500">
+            <div>น้ำ: ${formatCurrency(r.minWater)} (ขั้นต่ำ)</div>
+            <div>ไฟ: ${formatCurrency(r.minElec)} (ขั้นต่ำ)</div>
+          </td>
+          <td class="px-6 py-4 text-xs">
+            <span class="px-2.5 py-1 rounded-lg font-medium bg-slate-100 text-slate-600">${r.payMethod}</span>
+            <div class="text-slate-400 mt-1 font-mono">${bank ? bank.bankName + " " + bank.accountNumber : "เงินสด"}</div>
+          </td>
+          <td class="px-6 py-4 text-sm text-slate-500 truncate max-w-xs">${r.note || "-"}</td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end space-x-2">
+              <button onclick="editRoomDialog('${r.id}')" class="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="deleteRoomDialog('${r.id}', '${r.name}')" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (rooms.length === 0) {
+      roomsTableHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400">ยังไม่มีข้อมูลห้องพักในหอพักนี้</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-slate-500 text-sm font-medium">คุณสามารถเพิ่ม ลบ และบันทึกประเภทห้องเช่าได้ตลอดเวลา</span>
+        <button onclick="editRoomDialog()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-blue-500/10 cursor-pointer flex items-center space-x-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>เพิ่มห้องพักใหม่</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-6 py-4">ห้อง</th>
+                <th class="px-6 py-4">ค่าเช่าหลัก</th>
+                <th class="px-6 py-4">ขั้นต่ำ (น้ำ-ไฟ)</th>
+                <th class="px-6 py-4">วิธีชำระ / บัญชี</th>
+                <th class="px-6 py-4">หมายเหตุเพิ่มเติม</th>
+                <th class="px-6 py-4 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="roomsTableBody" class="text-slate-700">
+              ${roomsTableHTML}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // Dialog เพิ่ม/แก้ไขห้องพัก
+  window.editRoomDialog = function(roomId = "") {
+    const isEdit = !!roomId;
+    const room = isEdit ? STATE.rooms.find(r => r.id === roomId) : {
+      id: "", name: "", rent: 3000, minWater: 100, minElec: 100, payMethod: "เงินสด", bankId: "", note: ""
+    };
+
+    let bankOptions = `<option value="">-- เงินสด --</option>`;
+    STATE.banks.forEach(b => {
+      bankOptions += `<option value="${b.id}" ${b.id === room.bankId ? 'selected' : ''}>${b.bankName} - ${b.accountNumber} (${b.accountName})</option>`;
+    });
+
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-800">${isEdit ? 'แก้ไขรายละเอียดห้องพัก' : 'เพิ่มห้องพักใหม่'}</h3>
+          <button onclick="closeModal('roomModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form id="roomForm" class="p-6 space-y-4">
+          <input type="hidden" id="roomId" value="${room.id}">
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เลขห้อง / ชื่อห้อง *</label>
+              <input type="text" id="roomName" required value="${room.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น 101, Room A">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ค่าเช่ารายเดือน (บาท) *</label>
+              <input type="number" id="roomRent" required value="${room.rent}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ค่าน้ำขั้นต่ำ (บาท/เดือน)</label>
+              <input type="number" id="roomMinWater" value="${room.minWater}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="ต่ำสุดหากใช้ไม่ถึง">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ค่าไฟขั้นต่ำ (บาท/เดือน)</label>
+              <input type="number" id="roomMinElec" value="${room.minElec}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ช่องทางชำระเงินหลัก</label>
+              <select id="roomPayMethod" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+                <option value="เงินสด" ${room.payMethod === 'เงินสด' ? 'selected' : ''}>เงินสด</option>
+                <option value="โอนธนาคาร" ${room.payMethod === 'โอนธนาคาร' ? 'selected' : ''}>โอนธนาคาร</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">บัญชีธนาคารปลายทาง</label>
+              <select id="roomBankId" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+                ${bankOptions}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">หมายเหตุท้ายบิลของห้องนี้</label>
+            <textarea id="roomNote" rows="2" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="ใส่ข้อมูลเพิ่มเติมสำหรับบิล">${room.note}</textarea>
+          </div>
+
+          <div class="pt-4 border-t border-slate-150 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeModal('roomModal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold transition-all">ยกเลิก</button>
+            <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-500/10">บันทึกข้อมูล</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    openModal("roomModal", html);
+
+    document.getElementById("roomForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = {
+        id: document.getElementById("roomId").value,
+        name: document.getElementById("roomName").value.trim(),
+        rent: Number(document.getElementById("roomRent").value),
+        minWater: Number(document.getElementById("roomMinWater").value),
+        minElec: Number(document.getElementById("roomMinElec").value),
+        payMethod: document.getElementById("roomPayMethod").value,
+        bankId: document.getElementById("roomBankId").value,
+        note: document.getElementById("roomNote").value.trim()
+      };
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          closeModal("roomModal");
+          showToast("check-circle", "green", "บันทึกห้องสำเร็จแล้ว");
+          refreshCurrentTab();
+        })
+        .withFailureHandler((err) => handleError(err))
+        .saveRoom(payload);
+    });
+  }
+
+  // ลบห้องพัก
+  window.deleteRoomDialog = function(roomId, roomName) {
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4">
+        <div class="flex items-center space-x-3 text-rose-500">
+          <div class="p-2 bg-rose-50 rounded-xl"><i data-lucide="triangle-alert" class="w-6 h-6"></i></div>
+          <h4 class="text-base font-bold">ยืนยันการลบห้องพัก?</h4>
+        </div>
+        <p class="text-sm text-slate-500">คุณแน่ใจหรือไม่ว่าต้องการลบห้องพัก <strong class="text-slate-800 font-bold">${roomName}</strong>? ข้อมูลผู้เช่า บิล และมิเตอร์ที่เชื่อมโยงอาจได้รับผลกระทบ</p>
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button onclick="closeModal('deleteRoomModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">ยกเลิก</button>
+          <button onclick="confirmDeleteRoom('${roomId}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all shadow-md shadow-rose-500/10">ใช่, ยืนยันลบ</button>
+        </div>
+      </div>
+    `;
+    openModal("deleteRoomModal", html);
+  }
+
+  window.confirmDeleteRoom = function(roomId) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        closeModal("deleteRoomModal");
+        if (res.success) {
+          showToast("trash", "rose", "ลบห้องพักเสร็จสิ้น");
+          refreshCurrentTab();
+        } else {
+          showToast("alert-circle", "red", res.message);
+        }
+      })
+      .withFailureHandler((err) => handleError(err))
+      .deleteRoom(roomId);
+  }
+
+  // 3. จัดการผู้เช่า (Tenants Tab)
+  function renderTenants(tenants, rooms) {
+    const container = document.getElementById("contentContainer");
+    
+    let listHTML = "";
+    tenants.forEach(t => {
+      const room = rooms.find(r => r.id === t.roomId);
+      const roomName = room ? room.name : "ไม่ระบุ";
+      listHTML += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50/55 transition-colors">
+          <td class="px-6 py-4 font-bold text-blue-600">${roomName}</td>
+          <td class="px-6 py-4 font-semibold text-slate-800">${t.name}</td>
+          <td class="px-6 py-4 text-sm font-medium text-slate-500">${t.phone || "-"}</td>
+          <td class="px-6 py-4 text-xs font-semibold text-slate-500">${t.startDate || "-"}</td>
+          <td class="px-6 py-4 text-xs font-mono text-slate-400">
+            <div>น้ำ: ${t.startWater}</div>
+            <div>ไฟ: ${t.startElec}</div>
+          </td>
+          <td class="px-6 py-4">
+            <span class="px-2.5 py-1 text-xs font-semibold rounded-lg ${t.status === 'ใช้งาน' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}">
+              ${t.status}
+            </span>
+          </td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end space-x-2">
+              <button onclick="editTenantDialog('${t.roomId}')" class="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="deleteTenantDialog('${t.roomId}', '${t.name}')" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (tenants.length === 0) {
+      listHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-slate-400">ยังไม่มีข้อมูลผู้เช่าในระบบ (คุณต้องเพิ่มห้องพักก่อนจึงจะผูกผู้เช่าได้)</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-slate-500 text-sm font-medium">ผูกรายชื่อและประวัติผู้เช่าเข้ากับเลขห้องพัก</span>
+        <button onclick="editTenantDialog()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-blue-500/10 cursor-pointer flex items-center space-x-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>เพิ่มสัญญาผู้เช่าใหม่</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-6 py-4">ห้อง</th>
+                <th class="px-6 py-4">ผู้เช่า</th>
+                <th class="px-6 py-4">เบอร์โทรศัพท์</th>
+                <th class="px-6 py-4">วันเข้าอยู่</th>
+                <th class="px-6 py-4">มิเตอร์เริ่มต้น</th>
+                <th class="px-6 py-4">สถานะ</th>
+                <th class="px-6 py-4 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-700">
+              ${listHTML}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // Dialog เพิ่ม/แก้ไขสัญญาผู้เช่า
+  window.editTenantDialog = function(roomId = "") {
+    const isEdit = !!roomId;
+    const tenant = isEdit ? STATE.tenants.find(t => t.roomId === roomId) : {
+      roomId: "", name: "", phone: "", startDate: "", startWater: 0, startElec: 0, status: "ใช้งาน"
+    };
+
+    let roomOptions = "";
+    // ถ้าแก้ไข ห้ามสลับห้อง แต่ถ้าเพิ่มใหม่ ให้เลือกเฉพาะห้องที่ยังไม่มีสัญญาผู้เช่าใช้งานอยู่
+    STATE.rooms.forEach(r => {
+      const isAssigned = STATE.tenants.some(t => t.roomId === r.id && t.roomId !== tenant.roomId && t.status === 'ใช้งาน');
+      if (!isAssigned) {
+        roomOptions += `<option value="${r.id}" ${r.id === tenant.roomId ? 'selected' : ''}>${r.name} - ค่าเช่า ${formatCurrency(r.rent)}</option>`;
+      }
+    });
+
+    if (!roomOptions && !isEdit) {
+      showToast("alert-circle", "red", "ไม่มีห้องว่างเหลือสำหรับการทำสัญญาผู้เช่าใหม่");
+      return;
+    }
+
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-800">${isEdit ? 'แก้ไขสัญญาข้อมูลผู้เช่า' : 'ทำสัญญาเช่าใหม่'}</h3>
+          <button onclick="closeModal('tenantModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form id="tenantForm" class="p-6 space-y-4">
+          
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">เลือกห้องพักที่ต้องการทำสัญญา *</label>
+            ${isEdit ? `
+              <input type="hidden" id="tenantRoomId" value="${tenant.roomId}">
+              <div class="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-bold text-sm">
+                ห้อง ${STATE.rooms.find(r => r.id === tenant.roomId)?.name || tenant.roomId} (ไม่สามารถเปลี่ยนห้องได้)
+              </div>
+            ` : `
+              <select id="tenantRoomId" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+                ${roomOptions}
+              </select>
+            `}
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ชื่อ-สกุลผู้เช่า *</label>
+              <input type="text" id="tenantName" required value="${tenant.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น นายประหยัด แสนดี">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เบอร์โทรศัพท์ผู้เช่า</label>
+              <input type="tel" id="tenantPhone" value="${tenant.phone}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น 0891234567">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">วันเริ่มทำสัญญาเช่า *</label>
+              <input type="date" id="tenantStartDate" required value="${tenant.startDate || new Date().toISOString().substring(0, 10)}" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-xs">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เลขมิเตอร์น้ำเริ่มต้น *</label>
+              <input type="number" id="tenantStartWater" required value="${tenant.startWater}" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-xs">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เลขมิเตอร์ไฟเริ่มต้น *</label>
+              <input type="number" id="tenantStartElec" required value="${tenant.startElec}" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-xs">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">สถานะผู้เช่า</label>
+            <select id="tenantStatus" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm">
+              <option value="ใช้งาน" ${tenant.status === 'ใช้งาน' ? 'selected' : ''}>ใช้งาน (Active)</option>
+              <option value="ยกเลิกสัญญา" ${tenant.status === 'ยกเลิกสัญญา' ? 'selected' : ''}>ยกเลิกสัญญา/ออกแล้ว</option>
+            </select>
+          </div>
+
+          <div class="pt-4 border-t border-slate-150 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeModal('tenantModal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold transition-all">ยกเลิก</button>
+            <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-500/10">ทำสัญญาเสร็จสิ้น</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    openModal("tenantModal", html);
+
+    document.getElementById("tenantForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = {
+        roomId: document.getElementById("tenantRoomId").value,
+        name: document.getElementById("tenantName").value.trim(),
+        phone: document.getElementById("tenantPhone").value.trim(),
+        startDate: document.getElementById("tenantStartDate").value,
+        startWater: Number(document.getElementById("tenantStartWater").value),
+        startElec: Number(document.getElementById("tenantStartElec").value),
+        status: document.getElementById("tenantStatus").value
+      };
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          closeModal("tenantModal");
+          showToast("check-circle", "green", "บันทึกข้อมูลผู้เช่าสำเร็จ");
+          refreshCurrentTab();
+        })
+        .withFailureHandler((err) => handleError(err))
+        .saveTenant(payload);
+    });
+  }
+
+  // ลบสัญญาผู้เช่า
+  window.deleteTenantDialog = function(roomId, name) {
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4">
+        <div class="flex items-center space-x-3 text-rose-500">
+          <div class="p-2 bg-rose-50 rounded-xl"><i data-lucide="triangle-alert" class="w-6 h-6"></i></div>
+          <h4 class="text-base font-bold">ลบสัญญาผู้เช่า?</h4>
+        </div>
+        <p class="text-sm text-slate-500">คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลผู้เช่าเช่า <strong class="text-slate-800 font-bold">${name}</strong>? ขั้นตอนนี้จะไม่ลบห้องพักเดิม</p>
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button onclick="closeModal('deleteTenantModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">ยกเลิก</button>
+          <button onclick="confirmDeleteTenant('${roomId}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all shadow-md shadow-rose-500/10">ยืนยันลบ</button>
+        </div>
+      </div>
+    `;
+    openModal("deleteTenantModal", html);
+  }
+
+  window.confirmDeleteTenant = function(roomId) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        closeModal("deleteTenantModal");
+        if (res.success) {
+          showToast("trash-2", "rose", "ลบข้อมูลผู้เช่าเสร็จสิ้น");
+          refreshCurrentTab();
+        } else {
+          showToast("alert-circle", "red", res.message);
+        }
+      })
+      .withFailureHandler((err) => handleError(err))
+      .deleteTenant(roomId);
+  }
+
+  // 4. จดมิเตอร์แบบกลุ่ม (Meters Tab with batch edit & fast inline added item buttons)
+  function renderMeters(list) {
+    const container = document.getElementById("contentContainer");
+    
+    let tableRows = "";
+    list.forEach((item, index) => {
+      // ตรวจสอบสถานะการจด เพื่อตกแต่งแถว
+      const trBg = item.isRecorded ? "bg-slate-50/20" : "bg-blue-50/10";
+      
+      tableRows += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors ${trBg}" data-room="${item.roomId}">
+          <td class="px-6 py-4 font-bold text-slate-800">
+            ${item.roomName}
+            <div class="text-xs text-slate-400 font-medium font-sans mt-0.5">${item.tenantName}</div>
+          </td>
+          
+          <!-- มิเตอร์น้ำ -->
+          <td class="px-6 py-4">
+            <div class="flex items-center space-x-3">
+              <div>
+                <span class="text-xs text-slate-400 block font-semibold">เลขก่อนหน้า</span>
+                <input type="number" 
+                       id="prevWater_${item.roomId}" 
+                       value="${item.prevWater}" 
+                       data-orig="${item.originalPrevWater}"
+                       onchange="checkPrevMeterChange('${item.roomId}', 'Water')" 
+                       class="w-20 px-2 py-1 border border-slate-200 bg-slate-50 rounded-lg text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-blue-500">
+              </div>
+              <div class="text-slate-300 font-bold">→</div>
+              <div>
+                <span class="text-xs text-slate-400 block font-semibold">เลล่าสุดนี้ *</span>
+                <input type="number" 
+                       id="currWater_${item.roomId}" 
+                       value="${item.currWater}" 
+                       required
+                       class="w-24 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-sm font-bold font-mono text-center focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                       placeholder="ป้อนเลล่าสุด">
+              </div>
+            </div>
+          </td>
+          
+          <!-- มิเตอร์ไฟ -->
+          <td class="px-6 py-4">
+            <div class="flex items-center space-x-3">
+              <div>
+                <span class="text-xs text-slate-400 block font-semibold">เลขก่อนหน้า</span>
+                <input type="number" 
+                       id="prevElec_${item.roomId}" 
+                       value="${item.prevElec}" 
+                       data-orig="${item.originalPrevElec}"
+                       onchange="checkPrevMeterChange('${item.roomId}', 'Elec')" 
+                       class="w-20 px-2 py-1 border border-slate-200 bg-slate-50 rounded-lg text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-blue-500">
+              </div>
+              <div class="text-slate-300 font-bold">→</div>
+              <div>
+                <span class="text-xs text-slate-400 block font-semibold">เลล่าสุดนี้ *</span>
+                <input type="number" 
+                       id="currElec_${item.roomId}" 
+                       value="${item.currElec}" 
+                       required
+                       class="w-24 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-sm font-bold font-mono text-center focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                       placeholder="ป้อนเลล่าสุด">
+              </div>
+            </div>
+          </td>
+          
+          <!-- ช่องหมายเหตุ (เปิดให้อัปเดตหากมีการข้ามหรือแก้เลขก่อนหน้า) -->
+          <td class="px-6 py-4">
+            <input type="text" 
+                   id="note_${item.roomId}" 
+                   value="${item.note || ''}" 
+                   class="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700" 
+                   placeholder="ระบุเหตุผลหากแก้ไขเลขมิเตอร์ก่อนหน้า">
+          </td>
+          
+          <!-- รายการเพิ่มเติมลัด -->
+          <td class="px-6 py-4 text-center">
+            <button type="button" onclick="openInlineAddedItemsModal('${item.roomId}', '${item.roomName}')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>จัดการค่าเสริม</span>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (list.length === 0) {
+      tableRows = `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 text-sm">ไม่พบห้องพักที่ติดสัญญาและต้องการรับบิลในรอบเดือน ${STATE.month}</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="bg-blue-600/10 p-4 rounded-2xl border border-blue-200/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-start space-x-3 text-blue-800">
+          <div class="p-1.5 bg-blue-500/20 rounded-xl mt-0.5 text-blue-600"><i data-lucide="info" class="w-5 h-5"></i></div>
+          <div class="text-xs font-semibold leading-relaxed">
+            <span class="block text-sm font-bold text-slate-800 mb-0.5">ระบบบันทึกค่ามิเตอร์แบบลัด</span>
+            คุณสามารถกรอกมิเตอร์น้ำและไฟล่าสุดของทุกห้องได้พร้อมกัน ระบบจะคํานวณบิลรอบเดือนให้โดยอัตโนมัติ 
+            หากมีการสลับแก้ไขเลขมิเตอร์ก่อนหน้า <strong class="text-rose-600">โปรดกรอกเหตุผลประกอบการแก้ไขลงในช่องหมายเหตุด้วย</strong>
+          </div>
+        </div>
+        ${list.length > 0 ? `
+          <button onclick="saveAllMetersBatch()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20 shrink-0 cursor-pointer flex items-center justify-center space-x-2">
+            <i data-lucide="save" class="w-5 h-5"></i>
+            <span>บันทึกส่งข้อมูลมิเตอร์ทั้งหมด</span>
+          </button>
+        ` : ''}
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <form id="metersBatchForm" onsubmit="event.preventDefault();">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                  <th class="px-6 py-4">ห้อง / ผู้เช่า</th>
+                  <th class="px-6 py-4">มิเตอร์น้ำประปา (หน่วย)</th>
+                  <th class="px-6 py-4">มิเตอร์กระแสไฟฟ้า (หน่วย)</th>
+                  <th class="px-6 py-4 w-1/4">หมายเหตุเหตุผลเพิ่มเติม</th>
+                  <th class="px-6 py-4 text-center">ค่าบริการเพิ่มเติม</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+        </form>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // ดักจับและตรวจดูเหตุการณ์แก้เลขมิเตอร์ก่อนหน้า
+  window.checkPrevMeterChange = function(roomId, type) {
+    const input = document.getElementById(`prev${type}_${roomId}`);
+    const orig = Number(input.getAttribute("data-orig"));
+    const val = Number(input.value);
+    const noteInput = document.getElementById(`note_${roomId}`);
+    
+    if (val !== orig) {
+      input.classList.add("bg-amber-50", "border-amber-300", "text-amber-800");
+      noteInput.setAttribute("required", "true");
+      noteInput.classList.remove("bg-slate-50");
+      noteInput.classList.add("bg-amber-50/50", "border-amber-300");
+      noteInput.placeholder = "ต้องระบุหมายเหตุเพราะท่านเปลี่ยนเลขก่อนหน้า *";
+    } else {
+      input.classList.remove("bg-amber-50", "border-amber-300", "text-amber-800");
+      noteInput.removeAttribute("required");
+      noteInput.classList.remove("bg-amber-50/50", "border-amber-300");
+      noteInput.classList.add("bg-slate-50");
+      noteInput.placeholder = "ระบุเหตุผลหากแก้ไขเลขมิเตอร์ก่อนหน้า";
+    }
+  }
+
+  // ส่งบันทึกแบบกลุ่ม
+  window.saveAllMetersBatch = function() {
+    const items = [];
+    let isAllValid = true;
+
+    for (let i = 0; i < STATE.metersList.length; i++) {
+      const room = STATE.metersList[i];
+      const prevW = document.getElementById(`prevWater_${room.roomId}`).value;
+      const currW = document.getElementById(`currWater_${room.roomId}`).value;
+      const prevE = document.getElementById(`prevElec_${room.roomId}`).value;
+      const currE = document.getElementById(`currElec_${room.roomId}`).value;
+      const note = document.getElementById(`note_${room.roomId}`).value.trim();
+
+      // บังคับกรอกเลขมิเตอร์ล่าสุด
+      if (currW === "" || currE === "") {
+        showToast("alert-circle", "red", `กรุณาระบุเลขมิเตอร์ล่าสุดของห้อง ${room.roomName}`);
+        isAllValid = false;
+        break;
+      }
+
+      // เช็คเหตุผลประกอบเมื่อมีการอัปเดตค่าก่อนหน้า
+      const origW = Number(document.getElementById(`prevWater_${room.roomId}`).getAttribute("data-orig"));
+      const origE = Number(document.getElementById(`prevElec_${room.roomId}`).getAttribute("data-orig"));
+      
+      if ((Number(prevW) !== origW || Number(prevE) !== origE) && !note) {
+        showToast("alert-circle", "red", `กรุณากรอกเหตุผลในช่องหมายเหตุ สำหรับห้อง ${room.roomName} เนื่องจากมีการปรับเลขก่อนหน้า`);
+        document.getElementById(`note_${room.roomId}`).focus();
+        isAllValid = false;
+        break;
+      }
+
+      items.push({
+        roomId: room.roomId,
+        meterId: room.meterId,
+        prevWater: Number(prevW),
+        currWater: Number(currW),
+        prevElec: Number(prevE),
+        currElec: Number(currE),
+        note: note
+      });
+    }
+
+    if (!isAllValid) return;
+
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        showToast("save-all", "green", "บันทึกมิเตอร์กลุ่มและสั่งคำนวณบิลทั้งหมดเรียบร้อยแล้ว");
+        refreshCurrentTab();
+      })
+      .withFailureHandler((err) => handleError(err))
+      .saveMetersBatch(STATE.month, items, STATE.user.username);
+  }
+
+  // 5. รายการบริการเสริม (Added items modal popup inline)
+  window.openInlineAddedItemsModal = function(roomId, roomName) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((items) => {
+        hideLoader();
+        renderInlineAddedItems(roomId, roomName, items);
+      })
+      .withFailureHandler((err) => handleError(err))
+      .getAddedItems(roomId, STATE.month);
+  }
+
+  function renderInlineAddedItems(roomId, roomName, items) {
+    let rowsHTML = "";
+    let totalAdded = 0;
+    
+    items.forEach(it => {
+      totalAdded += it.amount;
+      rowsHTML += `
+        <tr class="border-b border-slate-100 text-xs">
+          <td class="px-4 py-2.5 font-bold text-slate-800">${it.name}</td>
+          <td class="px-4 py-2.5 font-bold text-blue-600">${formatCurrency(it.amount)}</td>
+          <td class="px-4 py-2.5 text-slate-500 truncate max-w-[120px]">${it.note || '-'}</td>
+          <td class="px-4 py-2.5 text-right">
+            <button onclick="deleteInlineAddedItem('${it.id}', '${roomId}', '${roomName}')" class="p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-all cursor-pointer">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (items.length === 0) {
+      rowsHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400 text-xs">ยังไม่มีบริการอื่นใดเสริมในรอบเดือนนี้</td></tr>`;
+    }
+
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-5 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-800">จัดการรายจ่ายเสริม: ห้อง ${roomName}</h3>
+            <p class="text-slate-400 text-xs mt-0.5">ประจำรอบการเงิน: ${STATE.month}</p>
+          </div>
+          <button onclick="closeModal('addedItemsModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        
+        <div class="p-5 space-y-4">
+          <!-- ฟอร์มสร้างใหม่ -->
+          <form id="addInlineItemForm" class="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-1">ชื่อเรียกบริการเสริม *</label>
+                <input type="text" id="addItemName" required class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs" placeholder="เช่น ค่าที่จอดรถ, ส่วนกลาง">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-1">จํานวนเงิน (บาท) *</label>
+                <input type="number" id="addItemAmount" required class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs" placeholder="เช่น 200">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">บันทึกช่วยจําเพิ่มเติม</label>
+              <input type="text" id="addItemNote" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none text-xs" placeholder="ป้อนหมายเหตุ">
+            </div>
+            <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <span>เพิ่มบันทึกรายจ่ายเสริม</span>
+            </button>
+          </form>
+
+          <!-- ตารางแสดงรายการที่มีอยู่ -->
+          <div class="border border-slate-100 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-400 font-bold border-b border-slate-100">
+                  <th class="px-4 py-2">ชื่อบริการ</th>
+                  <th class="px-4 py-2">ราคา</th>
+                  <th class="px-4 py-2">หมายเหตุ</th>
+                  <th class="px-4 py-2 text-right">ลบ</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHTML}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex items-center justify-between text-xs font-bold text-slate-700 px-1 pt-1">
+            <span>รวมค่าใช้จ่ายเสริมสะสม:</span>
+            <span class="text-sm text-blue-600">${formatCurrency(totalAdded)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    openModal("addedItemsModal", html);
+
+    // ส่งฟอร์มบันทึก
+    document.getElementById("addInlineItemForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = {
+        roomId: roomId,
+        month: STATE.month,
+        name: document.getElementById("addItemName").value.trim(),
+        amount: Number(document.getElementById("addItemAmount").value),
+        note: document.getElementById("addItemNote").value.trim()
+      };
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          showToast("check", "green", "เพิ่มรายการเสริมและส่งประมวลผลบิลแล้ว");
+          // รีโหลดข้อมูลป๊อปอัปนั้นซ้ำ
+          openInlineAddedItemsModal(roomId, roomName);
+        })
+        .withFailureHandler((err) => handleError(err))
+        .saveAddedItem(payload);
+    });
+  }
+
+  window.deleteInlineAddedItem = function(id, roomId, roomName) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        showToast("trash", "rose", "ลบรายการเสร็จสิ้น บิลได้รับการปรับปรุงใหม่");
+        openInlineAddedItemsModal(roomId, roomName);
+      })
+      .withFailureHandler((err) => handleError(err))
+      .deleteAddedItem(id, roomId, STATE.month);
+  }
+
+  // 6. หน้าบิล & ระบบพิมพ์ & ระบบชำระเงิน (Bills Tab)
+  function renderBills(bills, banks, rooms) {
+    const container = document.getElementById("contentContainer");
+    
+    let rowsHTML = "";
+    bills.forEach(b => {
+      let statusClass = "status-badge-unpaid";
+      if (b.status === "ชำระแล้ว") statusClass = "status-badge-paid";
+      if (b.status === "ชำระบางส่วน") statusClass = "status-badge-partial";
+
+      rowsHTML += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="px-4 py-4 text-center">
+            <input type="checkbox" name="printInvoiceCheckbox" value="${b.roomId}" class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer">
+          </td>
+          <td class="px-4 py-4 font-bold text-slate-800">${b.roomName}</td>
+          <td class="px-4 py-4 text-xs">
+            <div class="font-semibold text-slate-700">${b.tenantName}</div>
+            <div class="text-slate-400 mt-0.5">บิล: ${b.billId}</div>
+          </td>
+          <td class="px-4 py-4 text-xs text-slate-500 font-mono">
+            <div>น้ำ: ${b.waterUnits} u (${formatCurrency(b.waterCost)})</div>
+            <div>ไฟ: ${b.elecUnits} u (${formatCurrency(b.elecCost)})</div>
+          </td>
+          <td class="px-4 py-4 text-sm font-semibold text-slate-700">${formatCurrency(b.rentCost)}</td>
+          <td class="px-4 py-4 text-sm font-semibold text-slate-500">${formatCurrency(b.addedCost)}</td>
+          <td class="px-4 py-4 text-sm font-bold text-rose-500">${formatCurrency(b.prevUnpaid)}</td>
+          <td class="px-4 py-4 text-sm font-bold text-blue-600">${formatCurrency(b.total)}</td>
+          <td class="px-4 py-4 text-sm text-emerald-600 font-semibold">${formatCurrency(b.paid)}</td>
+          <td class="px-4 py-4 text-sm font-bold ${b.balance > 0 ? 'text-rose-600' : 'text-slate-500'}">${formatCurrency(b.balance)}</td>
+          <td class="px-4 py-4">
+            <span class="px-2.5 py-1 text-xs font-bold rounded-lg ${statusClass}">
+              ${b.status}
+            </span>
+          </td>
+          <td class="px-4 py-4 text-right">
+            <div class="flex items-center justify-end space-x-1">
+              ${b.status !== 'ชำระแล้ว' ? `
+                <button onclick="openPaymentDialog('${b.roomId}', '${b.roomName}', ${b.balance})" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1">
+                  <i data-lucide="hand-coins" class="w-3.5 h-3.5"></i>
+                  <span>รับเงิน</span>
+                </button>
+              ` : ''}
+              <button onclick="openSingleInvoicePreview('${b.roomId}')" class="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg transition-all cursor-pointer" title="พรีวิวใบแจ้งหนี้">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (bills.length === 0) {
+      rowsHTML = `<tr><td colspan="12" class="px-6 py-12 text-center text-slate-400 text-sm">ยังไม่มีข้อมูลบิลในรอบเดือนนี้ กรุณาบันทึกมิเตอร์น้ำ-ไฟเพื่อสร้างบิลอัตโนมัติ</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center space-x-2">
+          <button onclick="toggleSelectAllInvoices(true)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">เลือกทั้งหมด</button>
+          <button onclick="toggleSelectAllInvoices(false)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">ยกเลิกการเลือก</button>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="printSelectedInvoices()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-blue-500/10 flex items-center space-x-1.5 cursor-pointer">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            <span>พิมพ์ใบแจ้งหนี้ห้องที่เลือก</span>
+          </button>
+          <button onclick="printMonthlySummary()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-950 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-slate-900/10 flex items-center space-x-1.5 cursor-pointer">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>พิมพ์รายงานสรุปประจำเดือน</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-4 py-4 text-center w-12">เลือก</th>
+                <th class="px-4 py-4">ห้อง</th>
+                <th class="px-4 py-4">ผู้เช่า / บิล ID</th>
+                <th class="px-4 py-4">ค่าน้ำ+ไฟ (ใช้ไป)</th>
+                <th class="px-4 py-4">ค่าเช่าห้อง</th>
+                <th class="px-4 py-4">ค่าบริการอื่น</th>
+                <th class="px-4 py-4 text-rose-500">ยอดค้างยกมา</th>
+                <th class="px-4 py-4 text-blue-600">ยอดรวมสุทธิ</th>
+                <th class="px-4 py-4 text-emerald-600">ชำระแล้ว</th>
+                <th class="px-4 py-4">คงเหลือ</th>
+                <th class="px-4 py-4">สถานะบิล</th>
+                <th class="px-4 py-4 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-700 text-sm">
+              ${rowsHTML}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // เลือกหรือยกเลิกเช็คบ็อกซ์ทั้งหมดในตารางบิล
+  window.toggleSelectAllInvoices = function(select) {
+    const checkboxes = document.getElementsByName("printInvoiceCheckbox");
+    checkboxes.forEach(cb => cb.checked = select);
+  }
+
+  // 7. ตั้งค่าบัญชีและหมายเหตุ (Banks Tab)
+  function renderBanks(banks) {
+    const container = document.getElementById("contentContainer");
+    
+    let banksTableHTML = "";
+    banks.forEach(b => {
+      banksTableHTML += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-4 font-bold text-slate-800">${b.bankName}</td>
+          <td class="px-6 py-4 font-semibold text-slate-700">${b.accountNumber}</td>
+          <td class="px-6 py-4 font-medium text-slate-600">${b.accountName}</td>
+          <td class="px-6 py-4 text-xs text-slate-500 max-w-sm truncate">${b.footerNote || "-"}</td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end space-x-2">
+              <button onclick="editBankDialog('${b.id}')" class="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="deleteBankDialog('${b.id}', '${b.bankName}')" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    if (banks.length === 0) {
+      banksTableHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-400">ยังไม่มีการตั้งค่าข้อมูลบัญชีธนาคารปลายทาง</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-slate-500 text-sm font-medium">จัดการรายละเอียดบัญชีสำหรับการรับโอนเงินที่จะไปปรากฏที่ด้านล่างของใบแจ้งหนี้</span>
+        <button onclick="editBankDialog()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-blue-500/10 cursor-pointer flex items-center space-x-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>เพิ่มบัญชีใหม่</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-6 py-4">ธนาคาร</th>
+                <th class="px-6 py-4">เลขที่บัญชี</th>
+                <th class="px-6 py-4">ชื่อบัญชีผู้รับเงิน</th>
+                <th class="px-6 py-4">ข้อความ/หมายเหตุท้ายบิล</th>
+                <th class="px-6 py-4 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-700">
+              ${banksTableHTML}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // Dialog เพิ่ม/แก้ไขบัญชีธนาคาร
+  window.editBankDialog = function(bankId = "") {
+    const isEdit = !!bankId;
+    const bank = isEdit ? STATE.banks.find(b => b.id === bankId) : {
+      id: "", bankName: "ธนาคารกสิกรไทย", accountNumber: "", accountName: "", footerNote: "โปรดชำระเงินไม่เกินวันที่ 5 ของเดือน ขอบพระคุณค่ะ"
+    };
+
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-800">${isEdit ? 'แก้ไขข้อมูลธนาคาร' : 'เพิ่มบัญชีธนาคารรับเงิน'}</h3>
+          <button onclick="closeModal('bankModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form id="bankForm" class="p-6 space-y-4">
+          <input type="hidden" id="bankId" value="${bank.id}">
+          
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">ชื่อสถาบันการเงิน / ธนาคาร *</label>
+            <input type="text" id="bankName" required value="${bank.bankName}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น กสิกรไทย, ไทยพาณิชย์">
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เลขที่บัญชี *</label>
+              <input type="text" id="bankAccountNum" required value="${bank.accountNumber}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น 020-X-XXXXX-X">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ชื่อบัญชีเจ้าของหอพัก *</label>
+              <input type="text" id="bankAccountName" required value="${bank.accountName}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น นางพิมพ์ใจ สุขสม">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">หมายเหตุท้ายบิล (จะโชว์ล่างใบแจ้งหนี้)</label>
+            <textarea id="bankFooterNote" rows="3" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น กรุณาโอนเงินภายในกำหนดเวลาเพื่อไม่เสียค่าปรับ">${bank.footerNote}</textarea>
+          </div>
+
+          <div class="pt-4 border-t border-slate-150 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeModal('bankModal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold transition-all">ยกเลิก</button>
+            <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-500/10">บันทึก</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    openModal("bankModal", html);
+
+    document.getElementById("bankForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = {
+        id: document.getElementById("bankId").value,
+        bankName: document.getElementById("bankName").value.trim(),
+        accountNumber: document.getElementById("bankAccountNum").value.trim(),
+        accountName: document.getElementById("bankAccountName").value.trim(),
+        footerNote: document.getElementById("bankFooterNote").value.trim()
+      };
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          closeModal("bankModal");
+          showToast("check-circle", "green", "บันทึกบัญชีเงินรับฝากสำเร็จ");
+          refreshCurrentTab();
+        })
+        .withFailureHandler((err) => handleError(err))
+        .saveBankAccount(payload);
+    });
+  }
+
+  // ลบบัญชีรับเงิน
+  window.deleteBankDialog = function(id, name) {
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4">
+        <div class="flex items-center space-x-3 text-rose-500">
+          <div class="p-2 bg-rose-50 rounded-xl"><i data-lucide="triangle-alert" class="w-6 h-6"></i></div>
+          <h4 class="text-base font-bold">ยืนยันลบบัญชี?</h4>
+        </div>
+        <p class="text-sm text-slate-500">ต้องการลบบัญชี <strong class="text-slate-800 font-bold">${name}</strong> หรือไม่?</p>
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button onclick="closeModal('deleteBankModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">ยกเลิก</button>
+          <button onclick="confirmDeleteBank('${id}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all">ยืนยันลบ</button>
+        </div>
+      </div>
+    `;
+    openModal("deleteBankModal", html);
+  }
+
+  window.confirmDeleteBank = function(id) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        closeModal("deleteBankModal");
+        if (res.success) {
+          showToast("trash", "rose", "ลบบัญชีสำเร็จ");
+          refreshCurrentTab();
+        } else {
+          showToast("alert-circle", "red", res.message);
+        }
+      })
+      .withFailureHandler((err) => handleError(err))
+      .deleteBankAccount(id);
+  }
+
+  // 8. ประวัติการจ่ายเงิน (History Tab)
+  function renderHistory(payments) {
+    const container = document.getElementById("contentContainer");
+    
+    let tableRows = "";
+    payments.forEach(p => {
+      // แปลงวันที่ให้อ่านง่ายขึ้น
+      let dateStr = p.date;
+      if (p.date instanceof Date || (typeof p.date === 'string' && p.date.includes('T'))) {
+        const d = new Date(p.date);
+        dateStr = d.toLocaleString('th-TH');
+      }
+
+      tableRows += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-4 font-bold text-slate-800">${p.roomName}</td>
+          <td class="px-6 py-4 text-xs font-semibold text-slate-500">รอบบิล: ${p.billMonth} (${p.billId})</td>
+          <td class="px-6 py-4 text-xs font-medium text-slate-500">${dateStr}</td>
+          <td class="px-6 py-4 text-sm font-bold text-emerald-600">${formatCurrency(p.amount)}</td>
+          <td class="px-6 py-4 text-xs"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg font-medium">${p.method}</span></td>
+          <td class="px-6 py-4 text-xs font-semibold text-slate-700">${p.receiver}</td>
+          <td class="px-6 py-4 text-xs text-slate-500 truncate max-w-xs">${p.note || "-"}</td>
+        </tr>
+      `;
+    });
+
+    if (payments.length === 0) {
+      tableRows = `<tr><td colspan="7" class="px-6 py-12 text-center text-slate-400">ยังไม่มีบันทึกข้อมูลประวัติการรับเงินเช่าในรอบเดือนนี้</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <span class="text-slate-500 text-sm font-medium">ตารางประวัติสรุปการออกบิลค่าใช้จ่ายประจำรอบเดือนที่มีการนำฝากและตัดจ่ายจริง</span>
+      
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-6 py-4">ห้อง</th>
+                <th class="px-6 py-4">เลขอ้างอิงบิล / รอบเดือน</th>
+                <th class="px-6 py-4">วันที่รับชำระ</th>
+                <th class="px-6 py-4 text-emerald-600">จำนวนที่จ่ายมา</th>
+                <th class="px-6 py-4">วิธีจ่ายเงิน</th>
+                <th class="px-6 py-4">ผู้รับเงิน</th>
+                <th class="px-6 py-4">หมายเหตุบันทึกจํา</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-700 text-sm">
+              ${tableRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // 9. ตั้งค่าแอดมิน (Admin Tab)
+  function renderAdmins(admins) {
+    const container = document.getElementById("contentContainer");
+    
+    let tableRows = "";
+    admins.forEach(a => {
+      tableRows += `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-4 font-bold text-slate-800">${a.username}</td>
+          <td class="px-6 py-4 font-mono text-sm tracking-widest text-slate-400">****</td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end space-x-2">
+              <button onclick="editAdminDialog('${a.id}')" class="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="deleteAdminDialog('${a.id}', '${a.username}')" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all cursor-pointer">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-slate-500 text-sm font-medium">จัดการบัญชีและรหัสพิน (PIN) สำหรับผู้ดูแลระบบล็อกอินเข้าหน้าบ้าน</span>
+        <button onclick="editAdminDialog()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-blue-500/10 cursor-pointer flex items-center space-x-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>เพิ่มผู้ดูแลแอดมินใหม่</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-150 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-150">
+                <th class="px-6 py-4">ชื่อผู้ใช้ (User)</th>
+                <th class="px-6 py-4">รหัสพิน (PIN 4 ตัว)</th>
+                <th class="px-6 py-4 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-700">
+              ${tableRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  // Dialog เพิ่ม/แก้ไข Admin
+  window.editAdminDialog = function(adminId = "") {
+    const isEdit = !!adminId;
+    const admin = isEdit ? STATE.rooms.find(a => a.id === adminId) : { id: "", username: "", pin: "" };
+    
+    // หากแก้ไข ดึงรหัสจากป๊อปอัปเลย หรือให้กรอกใหม่
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-5 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-800">${isEdit ? 'แก้ไขสิทธิ์ดูแล ADMIN' : 'เพิ่มสิทธิ์ดูแล ADMIN'}</h3>
+          <button onclick="closeModal('adminModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form id="adminForm" class="p-6 space-y-4">
+          <input type="hidden" id="adminId" value="${adminId}">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">ชื่อผู้ใช้งาน *</label>
+            <input type="text" id="adminUser" required value="${admin ? admin.username || '' : ''}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="เช่น manager">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">รหัสพิน (PIN 4 ตัว) *</label>
+            <input type="password" id="adminPin" required pattern="[0-9]{4}" inputmode="numeric" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm" placeholder="พินเป็นตัวเลข 4 หลักเท่านั้น">
+          </div>
+          <div class="pt-4 border-t border-slate-150 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeModal('adminModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-semibold">ยกเลิก</button>
+            <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all">บันทึกสิทธิ์</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    openModal("adminModal", html);
+
+    document.getElementById("adminForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = {
+        id: document.getElementById("adminId").value,
+        username: document.getElementById("adminUser").value.trim(),
+        pin: document.getElementById("adminPin").value.trim()
+      };
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          closeModal("adminModal");
+          showToast("shield", "green", "บันทึกสิทธิ์แอดมินสำเร็จ");
+          refreshCurrentTab();
+        })
+        .withFailureHandler((err) => handleError(err))
+        .saveAdmin(payload);
+    });
+  }
+
+  // ลบผู้ดูแลระบบ
+  window.deleteAdminDialog = function(id, username) {
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4">
+        <div class="flex items-center space-x-3 text-rose-500">
+          <div class="p-2 bg-rose-50 rounded-xl"><i data-lucide="triangle-alert" class="w-6 h-6"></i></div>
+          <h4 class="text-base font-bold">ยืนยันถอนสิทธิ์?</h4>
+        </div>
+        <p class="text-sm text-slate-500">ต้องการลบแอดมิน <strong class="text-slate-800 font-bold">${username}</strong> หรือไม่?</p>
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button onclick="closeModal('deleteAdminModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">ยกเลิก</button>
+          <button onclick="confirmDeleteAdmin('${id}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all">ยืนยันลบ</button>
+        </div>
+      </div>
+    `;
+    openModal("deleteAdminModal", html);
+  }
+
+  window.confirmDeleteAdmin = function(id) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler((res) => {
+        hideLoader();
+        closeModal("deleteAdminModal");
+        if (res.success) {
+          showToast("trash", "rose", "ถอนสิทธิ์เรียบร้อย");
+          refreshCurrentTab();
+        } else {
+          showToast("alert-circle", "red", res.message);
+        }
+      })
+      .withFailureHandler((err) => handleError(err))
+      .deleteAdmin(id);
+  }
+
+  /* ==========================================================================
+     💸 TRANSACTION PAYMENT ENGINE (ระบบรับเงิน FIFO)
+     ========================================================================== */
+
+  // ป๊อปอัปจ่ายเงิน (รับชำระ FIFO)
+  window.openPaymentDialog = function(roomId, roomName, outstandingBalance) {
+    const html = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col">
+        <div class="px-5 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-800">รับชำระเงินค่าเช่าหอพัก: ห้อง ${roomName}</h3>
+            <p class="text-slate-400 text-xs mt-0.5">ระบบตัดจ่ายอัตโนมัติเรียงบิลเก่าก่อน (FIFO)</p>
+          </div>
+          <button onclick="closeModal('paymentModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        
+        <form id="paymentForm" class="p-5 space-y-4">
+          <input type="hidden" id="payRoomId" value="${roomId}">
+          
+          <div class="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-600">ยอดค้างรวมสะสมทั้งหมด:</span>
+            <span class="text-base font-extrabold text-rose-600">${formatCurrency(outstandingBalance)}</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">ยอดเงินที่นำมาจ่ายชำระจริง (บาท) *</label>
+            <input type="number" id="payAmount" required max="${outstandingBalance}" value="${outstandingBalance}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm font-bold text-slate-800">
+            <p class="text-[10px] text-slate-400 mt-1">หากชำระต่ำกว่ายอดค้างจริง บิลเก่าจะเปลี่ยนเป็นสถานะ "ชำระบางส่วน"</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">ช่องทางที่จ่ายเงิน *</label>
+              <select id="payMethod" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none text-xs">
+                <option value="โอนธนาคาร">โอนเงินเข้าบัญชี (หลัก)</option>
+                <option value="เงินสด">เงินสด</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">เจ้าหน้าที่ผู้เซ็นรับเงิน *</label>
+              <input type="text" id="payReceiver" required value="${STATE.user ? STATE.user.username : 'แอดมิน'}" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none text-xs font-semibold text-slate-700">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">หมายเหตุช่วยจําการชำระ</label>
+            <input type="text" id="payNote" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none text-xs" placeholder="ระบุเช่น โอนเวลา 12:00 น.">
+          </div>
+
+          <div class="pt-4 border-t border-slate-150 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeModal('paymentModal')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold">ยกเลิก</button>
+            <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10">บันทึกรับเงินเข้าคลัง</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    openModal("paymentModal", html);
+
+    document.getElementById("paymentForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const rId = document.getElementById("payRoomId").value;
+      const amt = Number(document.getElementById("payAmount").value);
+      const mthd = document.getElementById("payMethod").value;
+      const rcvr = document.getElementById("payReceiver").value.trim();
+      const note = document.getElementById("payNote").value.trim();
+
+      showLoader();
+      google.script.run
+        .withSuccessHandler((res) => {
+          hideLoader();
+          closeModal("paymentModal");
+          if (res.success) {
+            showToast("check-circle-2", "green", "บันทึกตัดชำระยอดสะสมด้วยระบบ FIFO เรียบร้อย");
+            refreshCurrentTab();
+          } else {
+            showToast("alert-circle", "red", res.message);
+          }
+        })
+        .withFailureHandler((err) => handleError(err))
+        .payBillsFIFO(rId, amt, mthd, rcvr, note);
+    });
+  }
+
+  /* ==========================================================================
+     🖨 PRINT SYSTEM LAYOUT GENERATOR (ระบบประมวลผลหน้าพรีวิว-พิมพ์ตรง A4)
+     ========================================================================== */
+
+  // ฟังก์ชันสกรีนและรวบรวมไฟล์งานพิมพ์ใบแจ้งหนี้เพื่อ preview 100%
+  window.openSingleInvoicePreview = function(roomId) {
+    renderInvoicesPrintContainer([roomId]);
+  }
+
+  window.printSelectedInvoices = function() {
+    const checkboxes = document.getElementsByName("printInvoiceCheckbox");
+    const selectedRoomIds = [];
+    checkboxes.forEach(cb => {
+      if (cb.checked) selectedRoomIds.push(cb.value);
+    });
+
+    if (selectedRoomIds.length === 0) {
+      showToast("alert-circle", "red", "โปรดเลือกอย่างน้อยหนึ่งห้องในบิลเพื่อสั่งพิมพ์ใบแจ้งหนี้");
+      return;
+    }
+
+    renderInvoicesPrintContainer(selectedRoomIds);
+  }
+
+  // สร้างใบแจ้งหนี้ 3 ใบในหน้า A4 เดียว (พรีวิวใน Modal + พิมพ์จริง 100% ตรงสเกล)
+  function renderInvoicesPrintContainer(roomIds) {
+    let printHTML = `<div class="modal-print-preview">`;
+    printHTML += `<div class="max-w-4xl mx-auto flex justify-between items-center mb-4 bg-slate-800 text-white p-4 rounded-xl border border-slate-700">`;
+    printHTML += `<div><span class="text-sm font-bold block">พรีวิวใบแจ้งหนี้หอพัก (A4 เสมือนจริง 100%)</span><span class="text-xs text-slate-400">ขนาด 210 x 297 มิลลิเมตร (3 ใบแจ้งหนี้ต่อ 1 แผ่นกระดาษ)</span></div>`;
+    printHTML += `<div class="flex items-center space-x-2"><button onclick="closeModal('printPreviewModal')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-semibold text-xs rounded-lg">ปิดพรีวิว</button>`;
+    printHTML += `<button onclick="triggerActualBrowserPrint('portrait')" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all flex items-center space-x-1.5"><i data-lucide="printer" class="w-4 h-4"></i><span>สั่งปริ้นท์ใบเสร็จ / บันทึก PDF</span></button></div>`;
+    printHTML += `</div>`;
+
+    // ค้นข้อมูลมาประกอบเอกสาร
+    let bodyInvoicesHTML = `<div id="printSection" class="bg-white">`;
+    
+    // แบ่งกลุ่มจัดทำหน้าละ 3 ใบ
+    for (let index = 0; index < roomIds.length; index++) {
+      const rId = roomIds[index];
+      const bill = STATE.billsList.find(b => b.roomId === rId);
+      const room = STATE.rooms.find(r => r.id === rId);
+      const bank = STATE.banks.find(b => b.id === room?.bankId);
+
+      // ข้อความหมายเหตุท้ายบิล
+      let billingNote = "";
+      if (room && room.payMethod === "โอนธนาคาร" && bank) {
+        billingNote = `โปรดโอนเข้าธนาคาร: ${bank.bankName} เลขบัญชี: ${bank.accountNumber} ชื่อ: ${bank.accountName} (${bank.footerNote || ''})`;
+      } else {
+        const firstBank = STATE.banks[0];
+        billingNote = firstBank ? firstBank.footerNote : "กรุณาชำระเงินตามกําหนดเวลา ขอบพระคุณค่ะ";
+      }
+
+      const totalValue = bill ? bill.total : (room ? room.rent : 0);
+      const waterCost = bill ? bill.waterCost : 0;
+      const waterUnits = bill ? bill.waterUnits : 0;
+      const elecCost = bill ? bill.elecCost : 0;
+      const elecUnits = bill ? bill.elecUnits : 0;
+      const addedCost = bill ? bill.addedCost : 0;
+      const prevUnpaid = bill ? bill.prevUnpaid : 0;
+
+      // HTML ใบแจ้งหนี้ย่อย (1 ใน 3 ใบต่อหน้ากระดาษ A4)
+      const invoiceCardHTML = `
+        <div class="invoice-card-triple relative">
+          <!-- Header -->
+          <div class="flex justify-between items-start border-b border-slate-200 pb-1.5">
+            <div>
+              <span class="text-sm font-extrabold text-blue-700 tracking-tight">ใบแจ้งหนี้ / ใบเสร็จรับเงินหอพัก</span>
+              <p class="text-[9px] text-slate-400 mt-0.5">ประจำรอบการเงิน: ${STATE.month}</p>
+            </div>
+            <div class="text-right text-[10px]">
+              <span class="font-bold text-slate-800">ห้องพักหมายเลข: <span class="text-sm text-blue-600 font-extrabold">${room ? room.name : rId}</span></span>
+              <p class="text-[8px] text-slate-400">เลขบิลอ้างอิง: ${bill ? bill.billId : 'B' + rId + '-TEMP'}</p>
+            </div>
+          </div>
+
+          <!-- ข้อมูลผู้เช่า -->
+          <div class="grid grid-cols-2 gap-4 text-[9px] text-slate-500 py-1 bg-slate-50 px-2 rounded-lg my-1">
+            <div><strong>ชื่อผู้เช่า:</strong> ${bill ? bill.tenantName : 'ไม่ระบุผู้เช่า'}</div>
+            <div class="text-right"><strong>สถานะการทำรอบ:</strong> ${bill ? bill.status : 'ยังไม่ระบุบิล'}</div>
+          </div>
+
+          <!-- ตารางรายละเอียด -->
+          <table class="w-full text-left text-[9px] border-collapse my-1">
+            <thead>
+              <tr class="bg-slate-100 text-slate-500 font-bold border-b border-slate-200">
+                <th class="py-1 px-1.5">รายการรายจ่าย</th>
+                <th class="py-1 px-1.5 text-center">หน่วยที่จดจด</th>
+                <th class="py-1 px-1.5 text-right">จำนวนเงิน (บาท)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-slate-100">
+                <td class="py-1 px-1.5 font-bold text-slate-800">1. ค่าเช่าห้องพักหลัก (สุทธิรายเดือน)</td>
+                <td class="py-1 px-1.5 text-center text-slate-400">-</td>
+                <td class="py-1 px-1.5 text-right font-semibold">${formatCurrency(room ? room.rent : 0)}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-1 px-1.5 font-bold text-slate-800">2. ค่าน้ำประปาใช้งานประจำรอบ</td>
+                <td class="py-1 px-1.5 text-center font-mono">${waterUnits} หน่วย (ละ 25 บ.)</td>
+                <td class="py-1 px-1.5 text-right font-semibold">${formatCurrency(waterCost)}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-1 px-1.5 font-bold text-slate-800">3. ค่ากระแสไฟฟ้าใช้งานประจำรอบ</td>
+                <td class="py-1 px-1.5 text-center font-mono">${elecUnits} หน่วย (ละ 9 บ.)</td>
+                <td class="py-1 px-1.5 text-right font-semibold">${formatCurrency(elecCost)}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-1 px-1.5 font-bold text-slate-800">4. บริการเสริมและค่าใช้จ่ายสำรองเพิ่มเติม</td>
+                <td class="py-1 px-1.5 text-center text-slate-400">-</td>
+                <td class="py-1 px-1.5 text-right font-semibold">${formatCurrency(addedCost)}</td>
+              </tr>
+              <tr class="border-b border-slate-150">
+                <td class="py-1 px-1.5 font-bold text-rose-500">5. ยอดค้างชำระยกยอดมาสะสมเก่า</td>
+                <td class="py-1 px-1.5 text-center text-slate-400">-</td>
+                <td class="py-1 px-1.5 text-right font-bold text-rose-600">${formatCurrency(prevUnpaid)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- ยอดรวมและหมายเหตุ -->
+          <div class="flex justify-between items-center bg-blue-50/70 p-2 rounded-lg my-1">
+            <span class="text-[9px] font-bold text-blue-800 flex-1 truncate pr-3 mr-1 border-r border-blue-200/50">${billingNote}</span>
+            <div class="text-right shrink-0">
+              <span class="text-[8px] text-slate-400 font-bold block uppercase">ยอดชำระสุทธิทั้งสิ้น</span>
+              <span class="text-xs font-extrabold text-blue-700">${formatCurrency(totalValue)}</span>
+            </div>
+          </div>
+
+          <!-- ส่วนลายเซ็นประทับรับเงิน -->
+          <div class="grid grid-cols-2 gap-4 text-[8px] text-slate-400 pt-1.5 border-t border-slate-100">
+            <div>ผู้ประสานรับเงิน: .................................................... (ลายเซ็นผู้รับ)</div>
+            <div class="text-right">วันที่รับชำระ: ............ / ............ / ............</div>
+          </div>
+        </div>
+      `;
+
+      bodyInvoicesHTML += invoiceCardHTML;
+    }
+
+    bodyInvoicesHTML += `</div>`;
+    printHTML += `<div class="a4-container overflow-hidden p-6 relative">`;
+    printHTML += bodyInvoicesHTML;
+    printHTML += `</div></div>`;
+
+    openModal("printPreviewModal", printHTML);
+  }
+
+  // พิมพ์รายงานสรุปข้อมูลทางการเงินของเดือน (Landscape A4 Layout)
+  window.printMonthlySummary = function() {
+    let printHTML = `<div class="modal-print-preview print-landscape-mode">`;
+    printHTML += `<div class="max-w-6xl mx-auto flex justify-between items-center mb-4 bg-slate-800 text-white p-4 rounded-xl border border-slate-700">`;
+    printHTML += `<div><span class="text-sm font-bold block">พรีวิวรายงานการเงินประจำรอบเดือน (Landscape A4)</span><span class="text-xs text-slate-400">รายงานสรุปบิลทั้งหมดและยอดรายรับจริงสะสม</span></div>`;
+    printHTML += `<div class="flex items-center space-x-2"><button onclick="closeModal('printPreviewModal')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-semibold text-xs rounded-lg">ปิดพรีวิว</button>`;
+    printHTML += `<button onclick="triggerActualBrowserPrint('landscape')" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all flex items-center space-x-1.5"><i data-lucide="printer" class="w-4 h-4"></i><span>สั่งพิมพ์บิลสรุป / บันทึก PDF</span></button></div>`;
+    printHTML += `</div>`;
+
+    // สรุปค่าสถิติดึงประกอบ
+    let totalRent = 0;
+    let totalWater = 0;
+    let totalElec = 0;
+    let totalAdded = 0;
+    let totalPreUnpaid = 0;
+    let totalAmount = 0;
+    let totalPaid = 0;
+    let totalBalance = 0;
+
+    let rowsHTML = "";
+    STATE.billsList.forEach(b => {
+      totalRent += b.rentCost;
+      totalWater += b.waterCost;
+      totalElec += b.elecCost;
+      totalAdded += b.addedCost;
+      totalPreUnpaid += b.prevUnpaid;
+      totalAmount += b.total;
+      totalPaid += b.paid;
+      totalBalance += b.balance;
+
+      rowsHTML += `
+        <tr class="border-b border-slate-200 text-[10px] text-slate-700">
+          <td class="py-1 px-2 font-bold">${b.roomName}</td>
+          <td class="py-1 px-2">${b.tenantName}</td>
+          <td class="py-1 px-2 text-right">${formatCurrency(b.rentCost)}</td>
+          <td class="py-1 px-2 text-right">${formatCurrency(b.waterCost)} (${b.waterUnits}u)</td>
+          <td class="py-1 px-2 text-right">${formatCurrency(b.elecCost)} (${b.elecUnits}u)</td>
+          <td class="py-1 px-2 text-right">${formatCurrency(b.addedCost)}</td>
+          <td class="py-1 px-2 text-right text-rose-500 font-semibold">${formatCurrency(b.prevUnpaid)}</td>
+          <td class="py-1 px-2 text-right text-blue-600 font-bold">${formatCurrency(b.total)}</td>
+          <td class="py-1 px-2 text-right text-emerald-600 font-semibold">${formatCurrency(b.paid)}</td>
+          <td class="py-1 px-2 text-right text-rose-600 font-bold">${formatCurrency(b.balance)}</td>
+          <td class="py-1 px-2 text-center font-bold">${b.status}</td>
+        </tr>
+      `;
+    });
+
+    let bodyHTML = `
+      <div id="printSection" class="bg-white">
+        <!-- รายงานหัวข้อ -->
+        <div class="flex justify-between items-center border-b-2 border-blue-600 pb-3 mb-5">
+          <div>
+            <span class="text-lg font-extrabold text-blue-700">รายงานบัญชีรายรับ-รายจ่ายหอพักอย่างย่อ</span>
+            <p class="text-xs text-slate-400 mt-0.5">ประจำรอบธุรกรรมทางการเงิน: ${STATE.month}</p>
+          </div>
+          <div class="text-right text-xs text-slate-500 font-medium">
+            พิมพ์ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')}
+          </div>
+        </div>
+
+        <!-- รายละเอียดตาราง -->
+        <table class="w-full text-left text-xs border-collapse border border-slate-300">
+          <thead>
+            <tr class="bg-slate-100 text-slate-600 font-bold border-b border-slate-300 text-[10px]">
+              <th class="py-2 px-2 border-r border-slate-300">ห้อง</th>
+              <th class="py-2 px-2 border-r border-slate-300">ชื่อผู้เช่า</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300">ค่าเช่าหอ</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300">ค่าน้ำประปา</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300">ค่ากระแสไฟฟ้า</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300">ค่าบริการเสริม</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300 text-rose-600">ยอดค้างสะสม</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300 text-blue-600">ยอดรวมสุทธิ</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300 text-emerald-600">รับโอนแล้ว</th>
+              <th class="py-2 px-2 text-right border-r border-slate-300 text-rose-600">คงเหลือค้าง</th>
+              <th class="py-2 px-2 text-center">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+            <!-- แถวรวมสรุปท้ายตาราง -->
+            <tr class="bg-blue-50/50 text-[10px] font-extrabold text-slate-800 border-t-2 border-slate-400">
+              <td colspan="2" class="py-2 px-2 text-center border-r border-slate-300">รวมรายรับสุทธิทั้งหมด</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-blue-700">${formatCurrency(totalRent)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-blue-700">${formatCurrency(totalWater)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-blue-700">${formatCurrency(totalElec)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-blue-700">${formatCurrency(totalAdded)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-rose-600">${formatCurrency(totalPreUnpaid)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-blue-800">${formatCurrency(totalAmount)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-emerald-600">${formatCurrency(totalPaid)}</td>
+              <td class="py-2 px-2 text-right border-r border-slate-300 text-rose-600">${formatCurrency(totalBalance)}</td>
+              <td class="py-2 px-2 text-center text-blue-700">คงค้าง ${((totalBalance / totalAmount) * 100).toFixed(1)}%</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <!-- สรุปผล -->
+        <div class="grid grid-cols-3 gap-6 mt-6 pt-5 border-t border-slate-200">
+          <div class="border border-slate-200 p-3 rounded-xl text-center bg-slate-50">
+            <span class="text-[10px] font-bold text-slate-400 block uppercase">ประมาณการรายรับรวม</span>
+            <span class="text-base font-extrabold text-slate-800">${formatCurrency(totalAmount)}</span>
+          </div>
+          <div class="border border-slate-200 p-3 rounded-xl text-center bg-emerald-50">
+            <span class="text-[10px] font-bold text-emerald-600 block uppercase">รายรับจริงเข้าบัญชีแล้ว</span>
+            <span class="text-base font-extrabold text-emerald-700">${formatCurrency(totalPaid)}</span>
+          </div>
+          <div class="border border-slate-200 p-3 rounded-xl text-center bg-rose-50">
+            <span class="text-[10px] font-bold text-rose-500 block uppercase">ยอดเงินคงค้างตามเก็บจริง</span>
+            <span class="text-base font-extrabold text-rose-700">${formatCurrency(totalBalance)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    printHTML += `<div class="a4-container-landscape overflow-hidden p-6 relative">`;
+    printHTML += bodyHTML;
+    printHTML += `</div></div>`;
+
+    openModal("printPreviewModal", printHTML);
+  }
+
+  // เรียกใช้คำสั่งบราวเซอร์เพื่อเริ่มสแกนปริ้นท์จริงในส่วนที่ครอบไว้
+  window.triggerActualBrowserPrint = function(mode) {
+    if (mode === "landscape") {
+      document.body.classList.add("print-landscape-mode");
+    } else {
+      document.body.classList.remove("print-landscape-mode");
+    }
+    
+    // เรียกคำสั่งพิมพ์ของเบราว์เซอร์
+    window.print();
+  }
+</script>

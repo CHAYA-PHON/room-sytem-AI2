@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบจัดการหอพัก (Dormitory Management System)</title>
+  
+  <!-- นำเข้า Tailwind CSS และ Google Fonts และ Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    /* ใช้ฟอนต์ Sarabun สำหรับเนื้อหาไทย และฟอนต์โมเดิร์นอื่น ๆ */
+    body {
+      font-family: 'Sarabun', sans-serif;
+    }
+    .font-logo {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .font-mono {
+      font-family: 'Fira Code', monospace;
+    }
+  </style>
+
+  <!-- แทรกสไตล์หลักจาก Styles.html -->
+  <?!= include("Styles"); ?>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden flex flex-col">
+
+  <!-- 🔐 หน้าจอเข้าสู่ระบบ (Login View) -->
+  <div id="loginView" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all duration-300 scale-100 border border-slate-100">
+      <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-10 text-white text-center relative">
+        <div class="inline-flex p-3 bg-blue-500/30 rounded-xl mb-4 backdrop-blur-md">
+          <i data-lucide="key-round" class="w-8 h-8 text-white"></i>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight">ระบบจัดการหอพัก</h1>
+        <p class="text-blue-100 text-sm mt-1">กรุณาเข้าสู่ระบบด้วยรหัสผ่านผู้ดูแลระบบ</p>
+      </div>
+      <form id="loginForm" class="p-8 space-y-6">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">ชื่อผู้ใช้งาน (User)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="user" class="w-5 h-5"></i>
+            </span>
+            <input type="text" id="loginUser" required class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-slate-800" placeholder="ระบุผู้ใช้ เช่น admin">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">รหัส PIN (ตัวเลข)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="lock" class="w-5 h-5"></i>
+            </span>
+            <input type="password" id="loginPin" required pattern="[0-9]*" inputmode="numeric" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-slate-800" placeholder="รหัส PIN 4 หลัก">
+          </div>
+        </div>
+        <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95 flex items-center justify-center space-x-2">
+          <span>เข้าสู่ระบบ</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 🏢 หน้าจอหลักของแอปพลิเคชัน (App View) -->
+  <div id="appView" class="hidden flex-1 flex flex-col md:flex-row overflow-hidden">
+    
+    <!-- Sidebar ซ้ายบน Desktop / Drawer บนมือถือ -->
+    <aside id="sidebar" class="bg-slate-900 text-slate-300 w-full md:w-64 flex flex-col transition-all duration-300 z-30 border-r border-slate-800 shrink-0">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="p-2 bg-blue-600 rounded-lg text-white">
+            <i data-lucide="building" class="w-5 h-5"></i>
+          </div>
+          <span class="font-logo font-bold text-white text-lg tracking-wider">DormManager</span>
+        </div>
+        <button id="closeSidebarBtn" class="md:hidden text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+      <div class="p-4 border-b border-slate-800 bg-slate-950/40">
+        <div class="text-xs text-slate-500 uppercase tracking-wider mb-2 font-semibold">ผู้ดูแลระบบ</div>
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm" id="avatarName">A</div>
+          <div class="flex-1 overflow-hidden">
+            <div class="text-sm font-semibold text-slate-200 truncate" id="adminUserName">Admin</div>
+            <div class="text-xs text-green-400 flex items-center"><span class="w-2 h-2 rounded-full bg-green-400 mr-1"></span> ออนไลน์</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="flex-1 overflow-y-auto p-3 space-y-1" id="mainNav">
+        <a href="#dashboard" data-tab="dashboard" class="nav-item active flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">แผงควบคุม (Dashboard)</span>
+        </a>
+        <a href="#rooms" data-tab="rooms" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="door-open" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">จัดการห้องพัก</span>
+        </a>
+        <a href="#tenants" data-tab="tenants" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="users" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">จัดการผู้เช่า</span>
+        </a>
+        <a href="#meters" data-tab="meters" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="gauge" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">จดมิเตอร์น้ำ-ไฟ</span>
+        </a>
+        <a href="#bills" data-tab="bills" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="receipt" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">บิล & ใบแจ้งหนี้</span>
+        </a>
+        <a href="#banks" data-tab="banks" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">บัญชี & หมายเหตุบิล</span>
+        </a>
+        <a href="#history" data-tab="history" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="history" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">ประวัติรับเงิน</span>
+        </a>
+        <a href="#admin" data-tab="admin" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl transition-all">
+          <i data-lucide="settings" class="w-5 h-5"></i>
+          <span class="font-medium text-sm">ตั้งค่า ADMIN</span>
+        </a>
+      </nav>
+
+      <div class="p-4 border-t border-slate-800">
+        <button id="logoutBtn" class="w-full flex items-center space-x-3 px-4 py-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-all text-sm font-medium">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+          <span>ออกจากระบบ</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- พื้นที่แสดงผลหลักขวา -->
+    <main class="flex-1 flex flex-col overflow-hidden bg-slate-50 relative">
+      
+      <!-- Top Header -->
+      <header class="bg-white h-16 border-b border-slate-200 px-4 md:px-6 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
+          <button id="openSidebarBtn" class="md:hidden text-slate-500 hover:text-slate-800 focus:outline-none">
+            <i data-lucide="menu" class="w-6 h-6"></i>
+          </button>
+          <h2 id="currentTabTitle" class="text-lg font-bold text-slate-800">แดชบอร์ด</h2>
+        </div>
+        
+        <!-- แถบกรองรอบเดือนส่วนกลางที่มีผลทั่วระบบ -->
+        <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+          <span class="text-xs font-semibold text-slate-500 flex items-center">
+            <i data-lucide="calendar" class="w-4 h-4 mr-1 text-blue-500"></i> รอบเดือน:
+          </span>
+          <input type="month" id="globalMonthPicker" class="text-sm font-bold bg-transparent text-slate-800 focus:outline-none border-none cursor-pointer">
+        </div>
+      </header>
+
+      <!-- โครงจอภาพหลัก -->
+      <section id="contentContainer" class="flex-1 overflow-y-auto p-4 md:p-6 pb-20 space-y-6">
+        <!-- Content will be injected dynamically via JS in App.html -->
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast การแจ้งเตือน -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-10 opacity-0 pointer-events-none transition-all duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-xl flex items-center space-x-3 max-w-sm border border-slate-800">
+    <div id="toastIcon" class="p-1 rounded-lg">
+      <!-- Icon dynamic -->
+    </div>
+    <span id="toastMsg" class="text-sm font-medium">การเชื่อมต่อเสร็จสมบูรณ์</span>
+  </div>
+
+  <!-- แทรกสคริปต์หลักจาก App.html -->
+  <?!= include("App"); ?>
+</body>
+</html>

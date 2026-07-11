@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e40af" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <!-- Accent Gradient -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="energyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded Base Card -->
+  <rect x="32" y="32" width="448" height="448" rx="110" fill="url(#bgGrad)" />
+  
+  <!-- Subtle Inner Shadow / Highlight Ring -->
+  <rect x="38" y="38" width="436" height="436" rx="104" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="8" />
+
+  <!-- Modern Building Silhouette -->
+  <!-- Left Wing -->
+  <rect x="130" y="220" width="80" height="180" rx="12" fill="#ffffff" opacity="0.8" />
+  <!-- Center Main Tower -->
+  <rect x="220" y="140" width="100" height="260" rx="16" fill="#ffffff" />
+  <!-- Right Wing -->
+  <rect x="330" y="260" width="60" height="140" rx="10" fill="#ffffff" opacity="0.6" />
+
+  <!-- Building Windows -->
+  <!-- Center Tower Windows -->
+  <rect x="245" y="175" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  <rect x="275" y="175" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  <rect x="245" y="215" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  <rect x="275" y="215" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  <rect x="245" y="255" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  <rect x="275" y="255" width="20" height="20" rx="4" fill="url(#accentGrad)" />
+  
+  <!-- Left Wing Windows -->
+  <rect x="150" y="250" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+  <rect x="178" y="250" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+  <rect x="150" y="285" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+  <rect x="178" y="285" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+  <rect x="150" y="320" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+  <rect x="178" y="320" width="16" height="16" rx="3" fill="#1e40af" opacity="0.7" />
+
+  <!-- Integrated Utilities Overlay Emblem on Bottom Right -->
+  <g transform="translate(320, 290) scale(0.95)">
+    <!-- Shield/Circle background for Utilities to pop -->
+    <circle cx="50" cy="50" r="55" fill="#1e293b" />
+    <circle cx="50" cy="50" r="50" fill="#0f172a" stroke="#3b82f6" stroke-width="4" />
+    
+    <!-- Water Drop -->
+    <path d="M50,15 C50,15 25,42 25,55 C25,68.8 36.2,80 50,80 C63.8,80 75,68.8 75,55 C75,42 50,15 50,15 Z" fill="#38bdf8" />
+    <!-- Lighting Bolt overlapping the water drop -->
+    <path d="M52,28 L34,54 L48,54 L44,76 L66,46 L50,46 Z" fill="url(#energyGrad)" stroke="#0f172a" stroke-width="3" />
+  </g>
+</svg>
