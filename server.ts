@@ -16,27 +16,25 @@ app.get("/api/health", (req, res) => {
 
 // AI Analytics endpoint using Gemini API
 app.post("/api/ai/analyze-trends", async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  let apiKey = (req.headers["x-gemini-api-key"] as string) || process.env.GEMINI_API_KEY;
+  const authHeader = req.headers["authorization"];
+  let accessToken = "";
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    accessToken = authHeader.substring(7);
+  }
 
-  if (!apiKey || apiKey.includes("MY_GEMINI_API_KEY")) {
+  const hasApiKey = apiKey && !apiKey.includes("MY_GEMINI_API_KEY");
+  const hasAccessToken = !!accessToken;
+
+  if (!hasApiKey && !hasAccessToken) {
     return res.status(400).json({
       error: "MISSING_API_KEY",
-      message: "ไม่พบคีย์ความลับ GEMINI_API_KEY ในระบบความปลอดภัย โปรดเพิ่มคีย์ในเมนู Settings > Secrets เพื่อเปิดใช้งานคุณสมบัติวิเคราะห์ด้วย AI",
+      message: "ไม่พบคีย์ความลับ GEMINI_API_KEY หรือบัญชี Google เชื่อมต่อ โปรดเชื่อมต่อบัญชี Google ของคุณ หรือระบุ Gemini API Key ส่วนตัวเพื่อเปิดใช้งานการวิเคราะห์",
     });
   }
 
   try {
     const { rooms = [], bills = [], meters = [], payments = [], selectedRoomIds = [], previousAnalysis = null } = req.body;
-
-    // Initialize Gemini SDK with custom user agent header as required by rules
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
 
     // Prepare dense and useful context for Gemini
     const systemInstruction = `คุณเป็นระบบปัญญาประดิษฐ์ (AI Analytics Expert) ประจำระบบนิติบุคคลและบริหารจัดการหอพัก "SABAIDEE DORM"
@@ -144,19 +142,108 @@ ${JSON.stringify(previousAnalysis, null, 2)}
       required: ["averages", "trends", "latePaymentAnalysis", "roomComparison", "overallSummary"]
     };
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema,
-        temperature: 0.1, // low temperature for precise analytics & mathematical calculations
-      },
-    });
+    let parsedAnalysis: any = null;
 
-    const jsonText = response.text?.trim() || "{}";
-    const parsedAnalysis = JSON.parse(jsonText);
+    if (hasAccessToken) {
+      // Direct REST call with OAuth access token
+      const modelsToTry = ["gemini-1.5-flash", "gemini-2.5-flash"];
+      let lastError: any = null;
+
+      for (const model of modelsToTry) {
+        try {
+          console.log(`Calling Gemini REST API via OAuth token using model: ${model}`);
+          const restResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema,
+                temperature: 0.1,
+              }
+            })
+          });
+
+          if (!restResponse.ok) {
+            const errText = await restResponse.text();
+            throw new Error(`Google API status ${restResponse.status}: ${errText}`);
+          }
+
+          const responseData = await restResponse.json();
+          const jsonText = responseData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+          parsedAnalysis = JSON.parse(jsonText);
+          break; // successfully parsed!
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`OAuth model ${model} failed:`, err.message || err);
+        }
+      }
+
+      if (!parsedAnalysis) {
+        throw lastError || new Error("ล้มเหลวในการสร้างเนื้อหาวิเคราะห์ผ่านบัญชี Google");
+      }
+    } else {
+      // Initialize Gemini SDK with custom user agent header for API Key
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build",
+          },
+        },
+      });
+
+      const response = await (async () => {
+        const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest"];
+        let lastError: any = null;
+
+        for (const model of modelsToTry) {
+          let attempts = 0;
+          const maxAttempts = 2;
+          
+          while (attempts < maxAttempts) {
+            try {
+              console.log(`Calling Gemini API using model: ${model} (Attempt ${attempts + 1}/${maxAttempts})`);
+              const res = await ai.models.generateContent({
+                model: model,
+                contents: prompt,
+                config: {
+                  systemInstruction,
+                  responseMimeType: "application/json",
+                  responseSchema,
+                  temperature: 0.1,
+                },
+              });
+              return res;
+            } catch (err: any) {
+              attempts++;
+              lastError = err;
+              console.warn(`Attempt ${attempts} failed for model ${model}:`, err.message || err);
+              
+              const isTransient = err.status === 503 || err.status === 429 || 
+                                  (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("UNAVAILABLE")));
+              
+              if (isTransient && attempts < maxAttempts) {
+                const delay = attempts * 1000;
+                console.log(`Transient error. Waiting ${delay}ms before retrying...`);
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              } else {
+                break;
+              }
+            }
+          }
+        }
+        throw lastError;
+      })();
+
+      const jsonText = response.text?.trim() || "{}";
+      parsedAnalysis = JSON.parse(jsonText);
+    }
 
     return res.json(parsedAnalysis);
   } catch (err: any) {
@@ -167,6 +254,130 @@ ${JSON.stringify(previousAnalysis, null, 2)}
     });
   }
 });
+
+// Helper to construct Google OAuth Redirect URI
+const getRedirectUri = (req: express.Request) => {
+  const host = req.get("host") || "localhost:3000";
+  // Always use https on Cloud Run or in production, http for local dev
+  const protocol = host.includes("localhost") ? "http" : "https";
+  return `${protocol}://${host}/auth/callback`;
+};
+
+// 1. Route to get Google Auth URL
+app.get("/api/auth/url", (req, res) => {
+  const redirectUri = getRedirectUri(req);
+  const clientId = process.env.OAUTH_CLIENT_ID;
+
+  if (!clientId) {
+    return res.status(500).json({
+      error: "OAUTH_NOT_CONFIGURED",
+      message: "ระบบยังไม่ได้เปิดใช้งาน OAuth Client ID ในตัวเลือกหลังบ้าน กรุณาติดต่อผู้พัฒนา",
+    });
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/cloud-platform",
+    access_type: "offline",
+    prompt: "consent",
+  });
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  res.json({ url: authUrl });
+});
+
+// 2. Google OAuth Callback Endpoint
+app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
+  const { code, error } = req.query;
+
+  if (error) {
+    return res.send(`
+      <html>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: '${error}' }, '*');
+              window.close();
+            } else {
+              window.location.href = '/';
+            }
+          </script>
+          <p>Authentication failed: ${error}. This window should close automatically.</p>
+        </body>
+      </html>
+    `);
+  }
+
+  if (!code) {
+    return res.status(400).send("Authorization code is missing.");
+  }
+
+  try {
+    const redirectUri = getRedirectUri(req);
+    
+    // Exchange Auth Code for tokens
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        code: code as string,
+        client_id: process.env.OAUTH_CLIENT_ID!,
+        client_secret: process.env.OAUTH_CLIENT_SECRET!,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }).toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      throw new Error(`Failed to exchange code: ${errText}`);
+    }
+
+    const tokens = await tokenResponse.json();
+    const accessToken = tokens.access_token;
+
+    // Get User Profile using the access token
+    const userinfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    let profile = { name: "Google User", email: "", picture: "" };
+    if (userinfoResponse.ok) {
+      profile = await userinfoResponse.json();
+    }
+
+    // Send access token and profile info to the parent window
+    res.send(`
+      <html>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ 
+                type: 'OAUTH_AUTH_SUCCESS', 
+                accessToken: '${accessToken}',
+                profile: ${JSON.stringify(profile)}
+              }, '*');
+              window.close();
+            } else {
+              window.location.href = '/';
+            }
+          </script>
+          <p>เชื่อมต่อสำเร็จ! กำลังปิดหน้าต่างนี้อัตโนมัติ...</p>
+        </body>
+      </html>
+    `);
+  } catch (err: any) {
+    console.error("OAuth callback exchange error:", err);
+    res.status(500).send(`Authentication error: ${err.message || err}`);
+  }
+});
+
 
 // Serve frontend assets
 async function startServer() {
