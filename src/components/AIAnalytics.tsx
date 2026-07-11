@@ -74,6 +74,37 @@ export default function AIAnalytics({ rooms, bills, meters, payments }: AIAnalyt
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<"averages" | "trends" | "payments" | "comparison" | "overall">("averages");
 
+  const [cachedData, setCachedData] = useState<{ inputsString: string; result: AIAnalysisResult } | null>(null);
+  const [hasDataChanged, setHasDataChanged] = useState<boolean>(false);
+
+  const currentInputsString = JSON.stringify({ rooms, bills, meters, payments, selectedRoomIds });
+
+  // Sync cache and analyze automatic retrieval
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("sabaidee_dorm_ai_analysis_cache");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.inputsString && parsed.result) {
+          setCachedData(parsed);
+          if (parsed.inputsString === currentInputsString) {
+            setAnalysisResult(parsed.result);
+            setHasDataChanged(false);
+          } else {
+            setHasDataChanged(true);
+            setAnalysisResult(null); // Clear active result since data changed
+          }
+        } else {
+          setHasDataChanged(false);
+        }
+      } else {
+        setHasDataChanged(false);
+      }
+    } catch (err) {
+      console.error("Error reading AI cache:", err);
+    }
+  }, [rooms, bills, meters, payments, selectedRoomIds, currentInputsString]);
+
   // Handle room selection for comparison
   const handleToggleRoom = (roomId: string) => {
     setSelectedRoomIds((prev) =>
@@ -98,16 +129,33 @@ export default function AIAnalytics({ rooms, bills, meters, payments }: AIAnalyt
           meters,
           payments,
           selectedRoomIds,
+          previousAnalysis: cachedData?.result || null
         }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type");
+      let data: any = {};
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `เซิร์ฟเวอร์ตอบกลับด้วยข้อผิดพลาดสถานะ ${response.status}`);
+      }
 
       if (!response.ok) {
         throw new Error(data.message || "เกิดข้อผิดพลาดในการเรียกใช้ API วิเคราะห์ข้อมูลด้วย AI");
       }
 
       setAnalysisResult(data);
+
+      // Save to local storage cache
+      const cachePayload = {
+        inputsString: currentInputsString,
+        result: data
+      };
+      localStorage.setItem("sabaidee_dorm_ai_analysis_cache", JSON.stringify(cachePayload));
+      setCachedData(cachePayload);
+      setHasDataChanged(false);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง โปรดตรวจสอบอินเทอร์เน็ตหรือคีย์ความลับของคุณ");
@@ -213,6 +261,39 @@ export default function AIAnalytics({ rooms, bills, meters, payments }: AIAnalyt
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* AI Analysis Cache / Status Banner */}
+        {cachedData && (
+          <div className={`mb-5 p-4 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
+            !hasDataChanged 
+              ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
+              : "bg-amber-50 border-amber-100 text-amber-800"
+          }`}>
+            <Sparkles className={`w-4 h-4 shrink-0 mt-0.5 ${!hasDataChanged ? "text-emerald-600" : "text-amber-600"}`} />
+            <div>
+              {!hasDataChanged ? (
+                <>
+                  <p className="font-bold text-emerald-900">⚡ แสดงผลวิเคราะห์ล่าสุดทันที (ข้อมูลไม่มีการเปลี่ยนแปลง)</p>
+                  <p className="text-emerald-700 mt-0.5 font-semibold">ระบบได้ดึงผลลัพธ์การวิเคราะห์ที่บันทึกไว้ล่าสุดมาแสดงผลโดยอัตโนมัติเพื่อประหยัดการทำงาน</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-amber-900">⚠️ ตรวจพบการเปลี่ยนแปลงของข้อมูลหอพักล่าสุด</p>
+                  <p className="text-amber-700 mt-0.5 font-semibold">คุณสามารถกดเริ่มวิเคราะห์ใหม่ได้ทันที โดยระบบจะส่งผลวิเคราะห์เดิมไปเป็นคีย์อ้างอิง เพื่อให้ AI วิเคราะห์การอัปเดตและเปรียบเทียบแนวโน้มพฤติกรรมให้คุณด้วย</p>
+                  <button 
+                    onClick={() => {
+                      setAnalysisResult(cachedData.result);
+                      setHasDataChanged(false); // Display previous results temporarily on demand
+                    }}
+                    className="mt-2.5 px-2 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200 rounded text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    🔍 แสดงผลวิเคราะห์เดิมชั่วคราว (อ้างอิงข้อมูลชุดเดิม)
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
 

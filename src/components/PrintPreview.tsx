@@ -42,6 +42,45 @@ function formatAdMonthYear(monthStr: string) {
   }
 }
 
+function AutoShrinkText({ text }: { text: string }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    
+    el.style.fontSize = "11.5px";
+    el.style.lineHeight = "1.15";
+    
+    const maxHeight = 28; // height of 2 lines
+    
+    let size = 11.5;
+    let attempts = 0;
+    
+    while (el.scrollHeight > maxHeight && size > 7 && attempts < 12) {
+      size -= 0.5;
+      el.style.fontSize = `${size}px`;
+      attempts++;
+    }
+  }, [text]);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="leading-tight break-words text-slate-700 font-bold"
+      style={{
+        maxHeight: "28px",
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden"
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 function formatThaiDate(dateStr: string) {
   if (!dateStr) return "";
   try {
@@ -717,20 +756,20 @@ export default function PrintPreview({
             {/* Main Billing Summary Table */}
             <table className="w-full border-collapse border border-black text-xs md:text-sm font-sans leading-normal">
               <colgroup>
-                <col className="w-[16%]" />
-                <col className="w-[8%]" />
+                <col className="w-[13%]" />
+                <col className="w-[7.5%]" />
                 <col className="w-[4.5%]" />
                 <col className="w-[4.5%]" />
                 <col className="w-[4.5%]" />
-                <col className="w-[8%]" />
+                <col className="w-[7%]" />
                 <col className="w-[4.5%]" />
                 <col className="w-[4.5%]" />
                 <col className="w-[4.5%]" />
-                <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[9%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[17.5%]" />
                 <col className="w-[5.5%]" />
-                <col className="w-[10.5%]" />
+                <col className="w-[8.5%]" />
               </colgroup>
               <thead className="bg-[#f2f2f2] text-black text-[10.5px] md:text-xs font-bold border border-black leading-normal">
                 <tr className="border-b border-black bg-slate-50">
@@ -856,8 +895,8 @@ export default function PrintPreview({
                       </td>
 
                       {/* Others: list names & cost */}
-                      <td className="px-1.5 py-3 md:py-3.5 border-r border-black font-sans text-[10px] md:text-xs leading-normal text-slate-700">
-                        {addedNames || ""}
+                      <td className="px-1.5 py-1.5 md:py-2 border-r border-black align-middle text-left font-sans leading-tight">
+                        <AutoShrinkText text={addedNames || ""} />
                       </td>
                       <td className="px-1.5 py-3 md:py-3.5 border-r border-black text-right font-mono text-[#c00000] font-bold">
                         {formatVal(b.addedCost)}
