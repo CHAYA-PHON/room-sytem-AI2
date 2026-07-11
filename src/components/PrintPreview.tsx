@@ -88,6 +88,19 @@ function formatThaiDate(dateStr: string) {
   }
 }
 
+function getThaiDisplayDate(monthStr: string) {
+  if (!monthStr) return "";
+  try {
+    const [yearStr, monthStrPart] = monthStr.split("-");
+    const year = parseInt(yearStr);
+    const monthVal = parseInt(monthStrPart);
+    const thaiYear = year + 543;
+    return `27/${monthVal}/${thaiYear}`;
+  } catch {
+    return "27/5/2569";
+  }
+}
+
 interface PrintPreviewProps {
   type: "invoices" | "summary";
   selectedRoomIds?: string[];
@@ -132,6 +145,10 @@ export default function PrintPreview({
   const displaySummaryBills = type === "summary" && selectedRoomIds && selectedRoomIds.length > 0
     ? bills.filter(b => selectedRoomIds.includes(b.roomId))
     : bills;
+
+  const allMeters = getMeters();
+  const allAdded = getAllAddedItems();
+  const appliedRate = getUtilityRateForMonth(month);
 
   // Auto-detect if any selected bill has many added items, and default to 3 bills per page to prevent overflow
   React.useEffect(() => {
@@ -602,72 +619,244 @@ export default function PrintPreview({
         /* Landscape monthly report summary layout */
         <>
           <div 
-            className="print-page bg-white p-10 shadow-2xl rounded-2xl border border-slate-200 w-full text-slate-800 relative"
+            className="print-page bg-white p-6 shadow-2xl rounded-2xl border border-slate-200 w-full text-slate-800 relative"
             style={{ 
-              maxWidth: "1000px", 
-              minHeight: "700px",
+              maxWidth: "1123px", 
+              minHeight: "794px",
               boxSizing: "border-box"
             }}
           >
-            <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4 mb-6">
-              <div>
-                <span className="text-lg font-black text-slate-800">📊 ตารางสรุปงบการเงินและยอดจัดเก็บประจำรอบเดือน</span>
-                <p className="text-xs text-slate-400 font-bold mt-1">ประจำปีงบประมาณและรอบจดมิเตอร์: {month}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-md no-print">
-                  สรุปภาพรวม ({displaySummaryBills.length} ห้องพักที่จัดเก็บ)
-                </span>
-              </div>
-            </div>
-
-            <table className="w-full text-left text-xs border-collapse border border-slate-200">
-              <thead>
-                <tr className="bg-slate-100 text-slate-700 font-bold text-[11px] border-b border-slate-200">
-                  <th className="px-3 py-2.5 border-r border-slate-200">ห้อง</th>
-                  <th className="px-3 py-2.5 border-r border-slate-200">ชื่อผู้เข้าเช่า</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200">ค่าเช่าตึก</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200">ค่าน้ำประปา</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200">ค่าไฟฟ้าหลัก</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200">รายจ่ายเสริมอื่นๆ</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200 text-rose-600">ค้างสะสมสะสมเดิม</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200 font-black text-blue-600">ยอดจัดเก็บสุทธิ</th>
-                  <th className="px-3 py-2.5 text-right border-r border-slate-200 text-emerald-600 no-print">ชำระแล้วจริง</th>
-                  <th className="px-3 py-2.5 text-right no-print">ยอดคงเหลือจ่าย</th>
-                </tr>
-              </thead>
+            {/* Header table block */}
+            <table className="w-full border-collapse border border-black mb-4 bg-[#fff2cc] text-xs font-bold text-black font-sans">
               <tbody>
-                {displaySummaryBills.map(b => (
-                  <tr key={b.billId} className="border-b border-slate-200 text-xs text-slate-700 hover:bg-slate-50/50">
-                    <td className="px-3 py-2.5 border-r border-slate-200 font-extrabold text-slate-800">ห้อง {b.roomName}</td>
-                    <td className="px-3 py-2.5 border-r border-slate-200 font-bold text-slate-600">{b.tenantName}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200">{formatCurrency(b.rentCost)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200">{formatCurrency(b.waterCost)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200">{formatCurrency(b.elecCost)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200">{formatCurrency(b.addedCost)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200 font-bold text-rose-500">{formatCurrency(b.prevUnpaid)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200 font-black text-blue-600">{formatCurrency(b.total)}</td>
-                    <td className="px-3 py-2.5 text-right border-r border-slate-200 font-bold text-emerald-600 no-print">{formatCurrency(b.paid)}</td>
-                    <td className="px-3 py-2.5 text-right font-black text-rose-600 no-print">{formatCurrency(b.balance)}</td>
-                  </tr>
-                ))}
-                
-                {/* Grand summary row */}
-                <tr className="bg-slate-100 font-black text-slate-800 border-b border-slate-900 text-[11px]">
-                  <td colSpan={2} className="px-3 py-3 text-right border-r border-slate-200">รวมทั้งสิ้นในระบบ (Sum totals):</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.rentCost, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.waterCost, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.elecCost, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.addedCost, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200 text-rose-600">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.prevUnpaid, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200 text-blue-600">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.total, 0))}</td>
-                  <td className="px-3 py-3 text-right border-r border-slate-200 text-emerald-600 no-print">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.paid, 0))}</td>
-                  <td className="px-3 py-3 text-right text-rose-600 no-print">{formatCurrency(displaySummaryBills.reduce((sum, b) => sum + b.balance, 0))}</td>
+                <tr className="border-b border-black">
+                  <td colSpan={4} className="text-center py-2.5 text-base font-black uppercase bg-[#fff2cc]">
+                    บันทึกค่าเช่า
+                  </td>
+                </tr>
+                <tr className="text-center text-[10px]">
+                  <td className="border-r border-black py-1.5 bg-[#fff2cc] font-black w-[20%]">วันที่บันทึก</td>
+                  <td className="border-r border-black py-1.5 bg-white font-mono text-[#2563eb] text-xs w-[30%]">{getThaiDisplayDate(month)}</td>
+                  <td className="border-r border-black py-1.5 bg-[#fff2cc] font-black w-[20%]">รอบบิล</td>
+                  <td className="py-1.5 bg-white font-mono text-[#2563eb] text-xs w-[30%]">{formatAdMonthYear(month)}</td>
                 </tr>
               </tbody>
             </table>
 
+            {/* Main Billing Summary Table */}
+            <table className="w-full border-collapse border border-black text-[10px] font-sans leading-tight">
+              <thead className="bg-[#f2f2f2] text-black text-[9px] font-bold border border-black leading-tight">
+                <tr className="border-b border-black bg-slate-50">
+                  <th rowSpan={2} className="border-r border-black text-center align-middle px-2 py-3 font-black text-black w-[13%]">
+                    ชื่อ-นามสกุล
+                  </th>
+                  <th rowSpan={2} className="border-r border-black text-center align-middle px-1 py-1 font-black text-black leading-tight w-[8%]">
+                    <div className="font-black">ค่าเช่า</div>
+                    <div className="text-[8px] text-slate-500 font-bold mt-1">ค่าขยะ</div>
+                  </th>
+                  
+                  {/* ค่าน้ำ */}
+                  <th colSpan={2} className="border-r border-black text-center bg-[#b4c6e7] text-black font-black py-1.5 w-[12%]">
+                    ค่าน้ำ
+                  </th>
+                  <th className="border-r border-black text-center bg-[#d9e1f2] text-black font-bold py-1.5 w-[5%]">
+                    หน่วยละ
+                  </th>
+                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-1.5 w-[8%]">
+                    {appliedRate.waterRate}
+                  </th>
 
+                  {/* ค่าไฟฟ้า */}
+                  <th colSpan={2} className="border-r border-black text-center bg-[#c6e0b4] text-black font-black py-1.5 w-[12%]">
+                    ค่าไฟฟ้า
+                  </th>
+                  <th className="border-r border-black text-center bg-[#e2efda] text-black font-bold py-1.5 w-[5%]">
+                    หน่วยละ
+                  </th>
+                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-1.5 w-[8%]">
+                    {appliedRate.elecRate}
+                  </th>
+
+                  {/* ยอดค้างชำระ */}
+                  <th className="border-r border-black text-center bg-[#fff2cc] text-black font-black py-1.5 w-[8%]">
+                    ยอดค้างชำระ
+                  </th>
+
+                  {/* อื่นๆ */}
+                  <th colSpan={2} className="border-r border-black text-center bg-[#f2f2f2] text-black font-black py-1.5 w-[14%]">
+                    อื่นๆ
+                  </th>
+
+                  {/* รวม */}
+                  <th rowSpan={2} className="text-center align-middle bg-[#1f4e79] text-white font-black px-2 py-3 w-[12%]">
+                    รวม
+                  </th>
+                </tr>
+
+                <tr className="border-b border-black bg-slate-50">
+                  {/* ค่าน้ำ subheadings */}
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งก่อน</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งหลัง</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">จำนวนที่ใช้</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-blue-800 bg-[#d9e1f2]">เป็นจำนวน</th>
+
+                  {/* ค่าไฟฟ้า subheadings */}
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งก่อน</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งหลัง</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">จำนวนที่ใช้</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-blue-800 bg-[#e2efda]">เป็นจำนวน</th>
+
+                  {/* ยอดค้างชำระ subheading */}
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-rose-700 bg-[#fff2cc]">
+                    {getThaiMonthYear(month, -1)}
+                  </th>
+
+                  {/* อื่นๆ subheadings */}
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600 font-sans">รายการ</th>
+                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600 font-sans">จำนวนเงิน</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displaySummaryBills.map((b) => {
+                  const room = rooms.find(r => r.id === b.roomId);
+                  const tenant = tenants.find(t => t.roomId === b.roomId && t.status === "ใช้งาน");
+                  
+                  const meter = allMeters.find(m => m.roomId === b.roomId && m.month === b.month);
+                  const prevWater = meter ? meter.prevWater : (tenant ? tenant.startWater : 0);
+                  const currWater = meter ? meter.currWater : prevWater + b.waterUnits;
+                  const prevElec = meter ? meter.prevElec : (tenant ? tenant.startElec : 0);
+                  const currElec = meter ? meter.currElec : prevElec + b.elecUnits;
+
+                  const roomAdded = allAdded.filter(item => item.roomId === b.roomId && item.month === b.month);
+                  const addedNames = roomAdded.map(item => item.name).join(", ") || "";
+
+                  const formatVal = (amount: number, showDashIfZero = true) => {
+                    if (showDashIfZero && amount === 0) return "-";
+                    return new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+                  };
+
+                  return (
+                    <tr key={b.billId} className="border-b border-black hover:bg-slate-50/50 text-slate-900 font-medium">
+                      {/* Name / Room */}
+                      <td className="px-2 py-1.5 border-r border-black font-semibold text-slate-800 font-sans text-center">
+                        {room ? room.name : `ห้อง ${b.roomName}`} {tenant ? `(${tenant.name})` : ""}
+                      </td>
+                      
+                      {/* Rent */}
+                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-slate-800">
+                        {formatVal(b.rentCost)}
+                      </td>
+
+                      {/* Water: prev, curr, units, amount */}
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{prevWater}</td>
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{currWater}</td>
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-900 font-bold">{b.waterUnits}</td>
+                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-rose-600 bg-[#d9e1f2]/20">
+                        {formatVal(b.waterCost)}
+                      </td>
+
+                      {/* Elec: prev, curr, units, amount */}
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{prevElec}</td>
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{currElec}</td>
+                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-900 font-bold">{b.elecUnits}</td>
+                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-rose-600 bg-[#e2efda]/20">
+                        {formatVal(b.elecCost)}
+                      </td>
+
+                      {/* Overdue */}
+                      <td className="px-2 py-1.5 border-r border-black text-right font-mono text-rose-600 bg-amber-50/10">
+                        {formatVal(b.prevUnpaid)}
+                      </td>
+
+                      {/* Others: list names & cost */}
+                      <td className="px-1.5 py-1.5 border-r border-black font-sans text-[8.5px] leading-tight text-slate-600">
+                        {addedNames || ""}
+                      </td>
+                      <td className="px-2 py-1.5 border-r border-black text-right font-mono text-rose-600">
+                        {formatVal(b.addedCost)}
+                      </td>
+
+                      {/* Total */}
+                      <td className="px-2 py-1.5 text-right font-mono font-black text-rose-600 bg-slate-50">
+                        {formatVal(b.total, false)}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* Grand Summary Row */}
+                {(() => {
+                  const totalRent = displaySummaryBills.reduce((sum, b) => sum + b.rentCost, 0);
+                  const totalWaterUnits = displaySummaryBills.reduce((sum, b) => sum + b.waterUnits, 0);
+                  const totalWaterCost = displaySummaryBills.reduce((sum, b) => sum + b.waterCost, 0);
+                  const totalElecUnits = displaySummaryBills.reduce((sum, b) => sum + b.elecUnits, 0);
+                  const totalElecCost = displaySummaryBills.reduce((sum, b) => sum + b.elecCost, 0);
+                  const totalPrevUnpaid = displaySummaryBills.reduce((sum, b) => sum + b.prevUnpaid, 0);
+                  const totalAddedCost = displaySummaryBills.reduce((sum, b) => sum + b.addedCost, 0);
+                  const totalSum = displaySummaryBills.reduce((sum, b) => sum + b.total, 0);
+
+                  const formatVal = (amount: number, showDashIfZero = true) => {
+                    if (showDashIfZero && amount === 0) return "-";
+                    return new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+                  };
+
+                  return (
+                    <tr className="bg-[#fff2cc] font-black text-slate-900 text-[10px] border-t-2 border-black border-b border-black">
+                      {/* รวม label */}
+                      <td className="px-2 py-2 border-r border-black text-center font-black text-slate-900 font-sans">
+                        รวม
+                      </td>
+
+                      {/* Total rent */}
+                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                        {formatVal(totalRent, false)}
+                      </td>
+
+                      {/* ค่าน้ำ prefix & units */}
+                      <td colSpan={2} className="px-1 py-2 border-r border-black text-center text-[#2e75b6] font-sans font-black text-[9.5px]">
+                        ค่าน้ำ
+                      </td>
+                      <td className="px-1 py-2 border-r border-black text-center font-mono font-black text-[#2e75b6] text-[9.5px]">
+                        {totalWaterUnits} หน่วย
+                      </td>
+                      {/* ค่าน้ำ total cost */}
+                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                        {formatVal(totalWaterCost, false)}
+                      </td>
+
+                      {/* ค่าไฟฟ้า prefix & units */}
+                      <td colSpan={2} className="px-1 py-2 border-r border-black text-center text-[#548235] font-sans font-black text-[9.5px]">
+                        ค่าไฟฟ้า
+                      </td>
+                      <td className="px-1 py-2 border-r border-black text-center font-mono font-black text-[#548235] text-[9.5px]">
+                        {totalElecUnits} หน่วย
+                      </td>
+                      {/* ค่าไฟฟ้า total cost */}
+                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                        {formatVal(totalElecCost, false)}
+                      </td>
+
+                      {/* Overdue total */}
+                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                        {formatVal(totalPrevUnpaid)}
+                      </td>
+
+                      {/* Others items empty */}
+                      <td className="px-1 py-2 border-r border-black text-center font-sans"></td>
+                      {/* Others total cost */}
+                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                        {formatVal(totalAddedCost)}
+                      </td>
+
+                      {/* Grand sum total of totals */}
+                      <td className="px-2 py-2 text-right font-mono font-black text-rose-700 text-xs bg-[#ffe699] border-l border-black">
+                        {formatVal(totalSum, false)}
+                      </td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
           </div>
         </>
       )}
