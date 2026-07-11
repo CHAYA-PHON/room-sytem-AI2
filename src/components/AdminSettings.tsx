@@ -13,8 +13,8 @@ interface AdminSettingsProps {
   onDelete: (id: string) => void;
   gsUrl: string;
   onSaveGsUrl: (url: string) => void;
-  onPushToSheets: () => Promise<void>;
-  onPullFromSheets: () => Promise<void>;
+  onPushToSheets: (url: string) => Promise<void>;
+  onPullFromSheets: (url: string) => Promise<void>;
   lastSyncTime: string;
   isSyncing: boolean;
   utilityRates: UtilityRate[];
@@ -25,6 +25,7 @@ interface AdminSettingsProps {
   onDeleteBillAnnouncement: (id: string) => void;
   ownerInfo: OwnerInfo;
   onSaveOwnerInfo: (info: OwnerInfo) => void;
+  onResetLocalDatabase?: () => void;
 }
 
 export default function AdminSettings({ 
@@ -44,7 +45,8 @@ export default function AdminSettings({
   onSaveBillAnnouncement,
   onDeleteBillAnnouncement,
   ownerInfo,
-  onSaveOwnerInfo
+  onSaveOwnerInfo,
+  onResetLocalDatabase
 }: AdminSettingsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null);
@@ -53,6 +55,10 @@ export default function AdminSettings({
   // Owner Info states
   const [ownerName, setOwnerName] = useState(ownerInfo?.name || "");
   const [ownerPhone, setOwnerPhone] = useState(ownerInfo?.phone || "");
+
+  React.useEffect(() => {
+    setInputGsUrl(gsUrl);
+  }, [gsUrl]);
 
   React.useEffect(() => {
     setOwnerName(ownerInfo?.name || "");
@@ -460,7 +466,14 @@ export default function AdminSettings({
               <input 
                 type="text"
                 value={inputGsUrl}
-                onChange={(e) => setInputGsUrl(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setInputGsUrl(val);
+                  onSaveGsUrl(val); // Auto-save on every keystroke to keep App state and localStorage perfectly synchronized
+                }}
+                onBlur={() => {
+                  onSaveGsUrl(inputGsUrl);
+                }}
                 className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm font-mono text-slate-800"
                 placeholder="https://script.google.com/macros/s/.../exec"
               />
@@ -487,7 +500,7 @@ export default function AdminSettings({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={onPullFromSheets}
+                onClick={() => onPullFromSheets(inputGsUrl)}
                 disabled={isSyncing}
                 className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
@@ -497,7 +510,7 @@ export default function AdminSettings({
 
               <button
                 type="button"
-                onClick={onPushToSheets}
+                onClick={() => onPushToSheets(inputGsUrl)}
                 disabled={isSyncing}
                 className="px-4 py-2 bg-[#2563eb] hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
@@ -523,6 +536,35 @@ export default function AdminSettings({
           </div>
         </div>
       </div>
+
+      {/* Danger Zone Card */}
+      {onResetLocalDatabase && (
+        <div className="bg-red-50/50 rounded-2xl border border-red-100 shadow-sm p-6 max-w-2xl mt-8 space-y-4 animate-in fade-in">
+          <div className="flex items-center space-x-2.5 pb-2">
+            <div className="p-2 bg-red-100 text-red-700 rounded-xl">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-red-900 leading-none">พื้นที่จัดการความปลอดภัย (Danger Zone)</h3>
+              <p className="text-xs text-red-500 font-semibold mt-1">การกระทำที่ส่งผลต่อข้อมูลทั้งหมดในอุปกรณ์เครื่องนี้</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-700">รีเซ็ตระบบกลับสู่ชุดข้อมูลตัวอย่างเริ่มต้น (Reset Demo Data)</p>
+              <p className="text-[11px] text-slate-400 font-semibold leading-relaxed max-w-md">ล้างข้อมูลห้องพัก ผู้เช่า ประวัติมิเตอร์ และประวัติการรับชำระทั้งหมดที่มีอยู่ เพื่อเริ่มใช้งานชุดข้อมูลตัวอย่าง 4 ห้องพักที่มีการคำนวณเรียบร้อยแล้วใหม่อีกครั้ง</p>
+            </div>
+            <button
+              type="button"
+              onClick={onResetLocalDatabase}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-red-500/10 cursor-pointer flex items-center space-x-1.5 shrink-0"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>ล้างและรีเซ็ตข้อมูลเริ่มต้น</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Admin Modal */}
       {isModalOpen && (

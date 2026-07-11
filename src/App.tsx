@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from "motion/react";
 // Import simulated DB layers
 import { 
   seedDatabase, 
+  resetToDefaultSeedData,
   getRooms, 
   saveRoom, 
   deleteRoom,
@@ -174,28 +175,8 @@ export default function App() {
       }
     }
 
-    // Auto pull from Google Sheets immediately on app open or reboot/reload!
-    if (initialUrl) {
-      const autoPullOnLoad = async () => {
-        setIsSyncing(true);
-        console.log("App startup: Automatically pulling latest database from Google Sheets...");
-        try {
-          const result = await pullFromGoogleSheets(initialUrl);
-          if (result.success) {
-            console.log("App startup: Google Sheets auto-pull succeeded!");
-            setLastSyncTimeState(getLastSyncTime());
-            refreshAllState();
-          } else {
-            console.warn("App startup: Google Sheets auto-pull failed:", result.message);
-          }
-        } catch (error) {
-          console.warn("App startup: Error during auto-pull from Google Sheets:", error);
-        } finally {
-          setIsSyncing(false);
-        }
-      };
-      autoPullOnLoad();
-    }
+    // Auto-pull on startup is disabled to protect local unsynced edits and maintain local state stability.
+    // Sync can be initiated manually via the settings menu.
   }, []);
 
   // Whenever the month or general mutations occur, reload dependent states
@@ -260,12 +241,6 @@ export default function App() {
   const triggerAutoPush = async () => {
     const currentUrl = getGsUrl();
     if (!currentUrl) return;
-    
-    // Skip auto-push if using the default template URL to avoid failing network requests
-    if (currentUrl === DEFAULT_GS_URL) {
-      console.log("Auto-sync: Skipping push as the Google Sheets URL is set to the default template.");
-      return;
-    }
 
     setIsSyncing(true);
     console.log("Auto-sync: Saving updates to Google Sheets...");
@@ -319,9 +294,11 @@ export default function App() {
 
   const handleSaveMetersBatch = (items: any[]) => {
     saveMetersBatch(month, items, user?.username || "admin");
-    alert(`บันทึกค่ามิเตอร์จำนวน ${items.length} ห้อง และประมวลผลจัดเก็บสำเร็จ!`);
     refreshAllState();
     triggerAutoPush();
+    setTimeout(() => {
+      alert(`บันทึกค่ามิเตอร์จำนวน ${items.length} ห้อง และประมวลผลจัดเก็บสำเร็จ!`);
+    }, 100);
     setActiveTab("payments"); // Auto transition to payments (Transaction History)
   };
 
@@ -341,37 +318,43 @@ export default function App() {
 
   const handlePayFIFO = (roomId: string, amount: number, method: "เงินสด" | "โอนธนาคาร", receiver: string, note: string) => {
     const result = payBillsFIFO(roomId, amount, method, receiver, note);
-    if (result.success) {
-      alert("บันทึกรับเงินตัดบิล FIFO เรียบร้อย!");
-    } else {
-      alert(result.message || "เกิดข้อผิดพลาด");
-    }
     refreshAllState();
     triggerAutoPush();
+    setTimeout(() => {
+      if (result.success) {
+        alert("บันทึกรับเงินตัดบิล FIFO เรียบร้อย!");
+      } else {
+        alert(result.message || "เกิดข้อผิดพลาด");
+      }
+    }, 100);
   };
 
   const handleDeletePayment = (payId: string) => {
     if (window.confirm("⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกและลบประวัติการชำระเงินรายการนี้? ยอดเงินที่จ่ายในบิลจะถูกปรับลดลง และยอดหนี้คงเหลืออาจเพิ่มขึ้น")) {
       const result = deletePayment(payId);
-      if (result.success) {
-        alert("ลบประวัติการชำระเงินและอัปเดตยอดบิลที่เกี่ยวข้องเรียบร้อยแล้ว!");
-      } else {
-        alert(result.message || "เกิดข้อผิดพลาดในการลบ");
-      }
       refreshAllState();
       triggerAutoPush();
+      setTimeout(() => {
+        if (result.success) {
+          alert("ลบประวัติการชำระเงินและอัปเดตยอดบิลที่เกี่ยวข้องเรียบร้อยแล้ว!");
+        } else {
+          alert(result.message || "เกิดข้อผิดพลาดในการลบ");
+        }
+      }, 100);
     }
   };
 
   const handleUpdatePayment = (payId: string, updatedFields: Partial<PaymentRecord>) => {
     const result = updatePayment(payId, updatedFields);
-    if (result.success) {
-      alert("แก้ไขข้อมูลประวัติการชำระเงินเรียบร้อยแล้ว!");
-    } else {
-      alert(result.message || "เกิดข้อผิดพลาดในการแก้ไข");
-    }
     refreshAllState();
     triggerAutoPush();
+    setTimeout(() => {
+      if (result.success) {
+        alert("แก้ไขข้อมูลประวัติการชำระเงินเรียบร้อยแล้ว!");
+      } else {
+        alert(result.message || "เกิดข้อผิดพลาดในการแก้ไข");
+      }
+    }, 100);
   };
 
   const handleBulkPay = (payments: { roomId: string; amount: number; method: "เงินสด" | "โอนธนาคาร"; receiver: string; note: string }[]) => {
@@ -387,13 +370,15 @@ export default function App() {
       }
     });
 
-    if (successRooms.length > 0) {
-      alert(`บันทึกชำระเงินตัดบิล FIFO สำเร็จเรียบร้อยสำหรับ ${successRooms.length} ห้อง!${errorRooms.length > 0 ? ` (ล้มเหลว ${errorRooms.length} ห้อง)` : ""}`);
-    } else {
-      alert("ไม่สามารถบันทึกการชำระเงินได้");
-    }
     refreshAllState();
     triggerAutoPush();
+    setTimeout(() => {
+      if (successRooms.length > 0) {
+        alert(`บันทึกชำระเงินตัดบิล FIFO สำเร็จเรียบร้อยสำหรับ ${successRooms.length} ห้อง!${errorRooms.length > 0 ? ` (ล้มเหลว ${errorRooms.length} ห้อง)` : ""}`);
+      } else {
+        alert("ไม่สามารถบันทึกการชำระเงินได้");
+      }
+    }, 100);
   };
 
   const handleSaveAdmin = (admin: Admin) => {
@@ -460,16 +445,25 @@ export default function App() {
     setGsUrl(url);
   };
 
-  const handlePushToSheets = async () => {
+  const handlePushToSheets = async (url?: string) => {
     setIsSyncing(true);
-    const result = await pushToGoogleSheets(gsUrl);
+    const targetUrl = url ? url.trim() : gsUrl.trim();
+    if (targetUrl && targetUrl !== gsUrl) {
+      handleSaveGsUrl(targetUrl);
+    }
+    const result = await pushToGoogleSheets(targetUrl || gsUrl);
     setIsSyncing(false);
     setLastSyncTimeState(getLastSyncTime());
+    alert(result.message);
   };
 
-  const handlePullFromSheets = async () => {
+  const handlePullFromSheets = async (url?: string) => {
     setIsSyncing(true);
-    const result = await pullFromGoogleSheets(gsUrl);
+    const targetUrl = url ? url.trim() : gsUrl.trim();
+    if (targetUrl && targetUrl !== gsUrl) {
+      handleSaveGsUrl(targetUrl);
+    }
+    const result = await pullFromGoogleSheets(targetUrl || gsUrl);
     setIsSyncing(false);
     setLastSyncTimeState(getLastSyncTime());
     if (result.success) {
@@ -477,6 +471,14 @@ export default function App() {
       refreshAllState();
     } else {
       alert(result.message);
+    }
+  };
+
+  const handleResetLocalDatabase = () => {
+    if (confirm("คุณแน่ใจหรือไม่ที่จะล้างข้อมูลปัจจุบันทั้งหมด และย้อนกลับไปใช้ชุดข้อมูลทดสอบเริ่มต้น (Seed Data) ระบบจะโหลดหน้าจอใหม่หลังจากคืนค่าสำเร็จ")) {
+      resetToDefaultSeedData();
+      refreshAllState();
+      window.location.reload();
     }
   };
 
@@ -924,6 +926,7 @@ export default function App() {
                   onDeleteBillAnnouncement={handleDeleteBillAnnouncement}
                   ownerInfo={ownerInfo}
                   onSaveOwnerInfo={handleSaveOwnerInfo}
+                  onResetLocalDatabase={handleResetLocalDatabase}
                 />
               )}
             </motion.div>

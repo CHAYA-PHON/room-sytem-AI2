@@ -204,6 +204,23 @@ export function seedDatabase() {
 }
 
 /**
+ * ล้างข้อมูลใน LocalStorage ทั้งหมดและรัน seed database ใหม่
+ */
+export function resetToDefaultSeedData() {
+  localStorage.removeItem(KEYS.ROOMS);
+  localStorage.removeItem(KEYS.TENANTS);
+  localStorage.removeItem(KEYS.METERS);
+  localStorage.removeItem(KEYS.ADDED_ITEMS);
+  localStorage.removeItem(KEYS.BILLS);
+  localStorage.removeItem(KEYS.BANKS);
+  localStorage.removeItem(KEYS.PAYMENTS);
+  localStorage.removeItem(KEYS.RATES);
+  localStorage.removeItem(KEYS.ANNOUNCEMENTS);
+  localStorage.removeItem(KEYS.OWNER_INFO);
+  seedDatabase();
+}
+
+/**
  * ดึงรายการชีต ห้อง
  */
 export function getRooms(): Room[] {

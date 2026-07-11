@@ -125,39 +125,121 @@ function doGet(e) {
 }
 
 /**
- * ฟังก์ชันบันทึกข้อมูลทุกตารางลงในแต่ละ Sheet
+ * ฟังก์ชันบันทึกข้อมูลแบบผสาน (UPSERT) ลงในแต่ละ Sheet (เพื่อไม่ให้สูญเสียสูตรหรือการจัดรูปแบบ)
  */
 function pushAllData(syncData) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
   for (var key in SHEETS_CONFIG) {
     var config = SHEETS_CONFIG[key];
-    var list = syncData[key] || [];
+    var incomingList = syncData[key] || [];
     
     // ตรวจสอบและสร้าง Sheet หากยังไม่มี
     var sheet = ss.getSheetByName(config.sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(config.sheetName);
+      sheet.appendRow(config.headers);
+      sheet.getRange(1, 1, 1, config.headers.length).setFontWeight("bold").setBackground("#e2e8f0");
     }
     
-    // เคลียร์ชีตเก่าทั้งหมด
-    sheet.clear();
+    // ค้นหาคอลัมน์ที่เป็นคีย์หลัก (คอลัมน์แรกใน headers เช่น id, roomId, meterId, billId, payId)
+    var pkName = config.headers[0];
     
-    // เขียนหัวข้อคอลัมน์ (Headers)
-    sheet.appendRow(config.headers);
+    // อ่านข้อมูลเดิมที่มีอยู่ในชีต
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    var existingHeaders = [];
+    var existingRows = [];
     
-    // ตั้งค่าหัวข้อให้หนา
-    sheet.getRange(1, 1, 1, config.headers.length).setFontWeight("bold").setBackground("#e2e8f0");
+    if (lastRow > 0 && lastCol > 0) {
+      existingHeaders = sheet.getRange(1, 1, 1, Math.min(lastCol, config.headers.length)).getValues()[0];
+      if (lastRow > 1) {
+        existingRows = sheet.getRange(2, 1, lastRow - 1, Math.min(lastCol, config.headers.length)).getValues();
+      }
+    } else {
+      sheet.appendRow(config.headers);
+      sheet.getRange(1, 1, 1, config.headers.length).setFontWeight("bold").setBackground("#e2e8f0");
+      existingHeaders = config.headers;
+    }
     
-    if (list.length > 0) {
-      var rows = [];
-      for (var i = 0; i < list.length; i++) {
-        var item = list[i] || {};
+    // ค้นหาดัชนีของคอลัมน์ที่เป็นคีย์หลัก
+    var pkColIndex = existingHeaders.indexOf(pkName);
+    if (pkColIndex === -1) {
+      pkColIndex = 0;
+    }
+    
+    // สร้างแผนผังข้อมูลเดิมและเซตคีย์หลัก
+    var mergedList = [];
+    var existingMap = {};
+    var existingPkSet = new Set();
+    
+    for (var i = 0; i < existingRows.length; i++) {
+      var rowVal = existingRows[i];
+      var item = {};
+      var hasData = false;
+      for (var j = 0; j < existingHeaders.length; j++) {
+        var h = existingHeaders[j];
+        if (!h) continue;
+        var cellVal = rowVal[j];
+        if (cellVal === "TRUE" || cellVal === true) {
+          item[h] = true;
+        } else if (cellVal === "FALSE" || cellVal === false) {
+          item[h] = false;
+        } else {
+          item[h] = cellVal;
+        }
+        if (cellVal !== "") {
+          hasData = true;
+        }
+      }
+      
+      if (hasData) {
+        var pkValue = item[pkName] ? item[pkName].toString().trim() : "";
+        if (pkValue) {
+          existingMap[pkValue] = item;
+          existingPkSet.add(pkValue);
+        }
+        mergedList.push(item);
+      }
+    }
+    
+    // นำข้อมูลใหม่ที่ส่งมาทำการอัปเดตหรือเพิ่มเข้ากลุ่ม
+    for (var k = 0; k < incomingList.length; k++) {
+      var incomingItem = incomingList[k];
+      var incomingPk = incomingItem[pkName] ? incomingItem[pkName].toString().trim() : "";
+      
+      if (incomingPk) {
+        if (existingPkSet.has(incomingPk)) {
+          // มีข้อมูลเดิมอยู่แล้ว -> อัปเดตทับเฉพาะฟิลด์ที่มีในตัวส่งเข้ามา
+          var existingItem = existingMap[incomingPk];
+          for (var field in incomingItem) {
+            existingItem[field] = incomingItem[field];
+          }
+        } else {
+          // ไม่มีข้อมูลเดิม -> เพิ่มเข้ากลุ่มรายการใหม่
+          mergedList.push(incomingItem);
+          existingMap[incomingPk] = incomingItem;
+          existingPkSet.add(incomingPk);
+        }
+      } else {
+        // หากไม่มีคีย์หลัก ให้ต่อท้ายรายการไปเลย
+        mergedList.push(incomingItem);
+      }
+    }
+    
+    // ล้างเฉพาะส่วนข้อมูลในชีตเดิม โดยเก็บแถวแรก (Headers) และการจัดรูปแบบเดิมไว้
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+    }
+    
+    // เขียนข้อมูลที่ผสานกันเสร็จแล้วทั้งหมดกลับลงชีต
+    if (mergedList.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < mergedList.length; i++) {
+        var item = mergedList[i] || {};
         var row = [];
         for (var j = 0; j < config.headers.length; j++) {
           var val = item[config.headers[j]];
-          
-          // แปลงประเภทตัวแปรให้เหมาะสม เช่น boolean หรือ object/array
           if (val === undefined || val === null) {
             row.push("");
           } else if (typeof val === "boolean") {
@@ -168,11 +250,10 @@ function pushAllData(syncData) {
             row.push(val.toString());
           }
         }
-        rows.push(row);
+        rowsToWrite.push(row);
       }
       
-      // บันทึกข้อมูลแบบเบสเพื่อประสิทธิภาพที่ดีขึ้น
-      sheet.getRange(2, 1, rows.length, config.headers.length).setValues(rows);
+      sheet.getRange(2, 1, rowsToWrite.length, config.headers.length).setValues(rowsToWrite);
     }
     
     // ปรับความกว้างคอลัมน์ให้อัตโนมัติ

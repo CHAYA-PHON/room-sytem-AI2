@@ -86,7 +86,7 @@ export async function pushToGoogleSheets(url: string): Promise<{ success: boolea
 
     return { 
       success: true, 
-      message: `ซิงค์นำเข้า Google Sheets สำเร็จเมื่อเวลา ${timeStr} ${result?.message ? `(${result.message})` : ""}` 
+      message: `ส่งข้อมูลไปยัง Google Sheets (Push) สำเร็จเมื่อเวลา ${timeStr} ${result?.message ? `(${result.message})` : ""}` 
     };
   } catch (error: any) {
     console.warn("Push to Google Sheets failed:", error);
@@ -187,6 +187,14 @@ export async function pullFromGoogleSheets(url: string): Promise<{ success: bool
 function applyPulledData(data: any) {
   if (!data) return;
 
+  // Safety guard: If the pulled Google Sheets has 0 records in core tables (rooms/tenants),
+  // we do NOT want to overwrite the local storage and wipe the user's data.
+  const roomCount = data.rooms?.length || 0;
+  const tenantCount = data.tenants?.length || 0;
+  if (roomCount === 0 && tenantCount === 0) {
+    throw new Error("แผ่นงาน Google Sheets นี้ไม่มีข้อมูลห้องพักและผู้เช่าอาศัยอยู่เลย เพื่อป้องกันข้อมูลสูญหายระบบจะไม่เขียนทับข้อมูลเดิมของคุณด้วยข้อมูลว่างเปล่า กรุณาใช้ปุ่ม 'ส่งข้อมูล (Push)' ในหน้าตั้งค่าแอดมินก่อน เพื่อเริ่มส่งชุดข้อมูลตั้งต้นจากเครื่องคุณขึ้นไปเก็บไว้บนแผ่นงาน Google Sheets");
+  }
+
   const tables = {
     rooms: "dorm_rooms",
     tenants: "dorm_tenants",
@@ -198,6 +206,16 @@ function applyPulledData(data: any) {
     admins: "dorm_admins"
   };
 
+  // Pre-calculate room tenantId mapping for old schemas to preserve relationships
+  const tenantToRoomMap: Record<string, string> = {};
+  if (Array.isArray(data.rooms)) {
+    data.rooms.forEach((r: any) => {
+      if (r.id && r.tenantId) {
+        tenantToRoomMap[r.tenantId.toString()] = r.id.toString();
+      }
+    });
+  }
+
   Object.entries(tables).forEach(([apiKey, localKey]) => {
     if (data[apiKey] && Array.isArray(data[apiKey])) {
       let array = data[apiKey];
@@ -205,54 +223,108 @@ function applyPulledData(data: any) {
       if (apiKey === "rooms") {
         array = array.map((r: any) => ({
           ...r,
-          rent: Number(r.rent) || 0,
+          id: r.id ? r.id.toString() : "",
+          name: r.name ? r.name.toString() : "",
+          rent: r.rent !== undefined ? (Number(r.rent) || 0) : (Number(r.monthlyRent) || 0),
           minWater: Number(r.minWater) || 0,
-          minElec: Number(r.minElec) || 0
-        }));
+          minElec: Number(r.minElec) || 0,
+          payMethod: r.payMethod || "โอนธนาคาร",
+          bankId: r.bankId ? r.bankId.toString() : "",
+          note: r.note || r.notes || ""
+        })).filter((r: any) => r.id !== "");
       } else if (apiKey === "meters") {
-        array = array.map((m: any) => ({ 
-          ...m, 
-          month: normalizeMonth(m.month),
-          recordedDate: m.recordedDate ? normalizeDate(m.recordedDate) : undefined,
-          prevWater: Number(m.prevWater) || 0,
-          currWater: Number(m.currWater) || 0,
-          prevElec: Number(m.prevElec) || 0,
-          currElec: Number(m.currElec) || 0
-        }));
+        array = array.map((m: any) => {
+          const roomId = m.roomId ? m.roomId.toString() : "";
+          const month = normalizeMonth(m.month);
+          return {
+            ...m, 
+            meterId: m.meterId || m.id || (roomId && month ? `M${roomId}-${month.replace("-", "")}` : `M${Date.now()}`),
+            roomId,
+            month,
+            recordedDate: m.recordedDate ? normalizeDate(m.recordedDate) : undefined,
+            prevWater: Number(m.prevWater) || 0,
+            currWater: m.currWater !== undefined ? (Number(m.currWater) || 0) : (Number(m.waterValue) || 0),
+            prevElec: Number(m.prevElec) || 0,
+            currElec: m.currElec !== undefined ? (Number(m.currElec) || 0) : (Number(m.electricityValue) || 0),
+            note: m.note || "",
+            recordedBy: m.recordedBy || "แอดมิน"
+          };
+        }).filter((m: any) => m.roomId !== "");
       } else if (apiKey === "added_items") {
         array = array.map((it: any) => ({ 
           ...it, 
+          id: it.id ? it.id.toString() : `ADD${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          roomId: it.roomId ? it.roomId.toString() : "",
           month: normalizeMonth(it.month),
-          amount: Number(it.amount) || 0
-        }));
+          name: it.name ? it.name.toString() : "",
+          amount: it.amount !== undefined ? (Number(it.amount) || 0) : ((Number(it.unitPrice) * (it.isMultiplier ? 1 : 1)) || 0),
+          note: it.note || ""
+        })).filter((it: any) => it.roomId !== "");
       } else if (apiKey === "bills") {
-        array = array.map((b: any) => ({ 
-          ...b, 
-          month: normalizeMonth(b.month),
-          waterUnits: Number(b.waterUnits) || 0,
-          waterCost: Number(b.waterCost) || 0,
-          elecUnits: Number(b.elecUnits) || 0,
-          elecCost: Number(b.elecCost) || 0,
-          rentCost: Number(b.rentCost) || 0,
-          addedCost: Number(b.addedCost) || 0,
-          prevUnpaid: Number(b.prevUnpaid) || 0,
-          total: Number(b.total) || 0,
-          paid: Number(b.paid) || 0,
-          balance: Number(b.balance) || 0
-        }));
+        array = array.map((b: any) => {
+          const roomId = b.roomId ? b.roomId.toString() : "";
+          const month = normalizeMonth(b.month);
+          const billId = b.billId || b.id || (roomId && month ? `B${roomId}-${month.replace("-", "")}` : `B${Date.now()}`);
+          const total = b.total !== undefined ? (Number(b.total) || 0) : (Number(b.totalAmount) || 0);
+          const paid = b.paid !== undefined ? (Number(b.paid) || 0) : (b.isPaid === true || b.isPaid === "TRUE" ? total : 0);
+          const balance = b.balance !== undefined ? (Number(b.balance) || 0) : (total - paid);
+          const status = b.status || (balance <= 0 ? "ชำระแล้ว" : "ค้างชำระ");
+          return { 
+            ...b, 
+            billId,
+            roomId,
+            month,
+            roomName: b.roomName ? b.roomName.toString() : "",
+            tenantName: b.tenantName ? b.tenantName.toString() : "",
+            waterUnits: Number(b.waterUnits) || 0,
+            waterCost: Number(b.waterCost) || Number(b.waterCost) || 0,
+            elecUnits: Number(b.elecUnits) || 0,
+            elecCost: Number(b.elecCost) || Number(b.electricityCost) || 0,
+            rentCost: b.rentCost !== undefined ? (Number(b.rentCost) || 0) : (Number(b.monthlyRent) || 0),
+            addedCost: b.addedCost !== undefined ? (Number(b.addedCost) || 0) : (Number(b.addedItemsCost) || 0),
+            prevUnpaid: Number(b.prevUnpaid) || 0,
+            total,
+            paid,
+            balance,
+            status,
+            createdDate: b.createdDate ? normalizeDate(b.createdDate) : (b.paidDate ? normalizeDate(b.paidDate) : "")
+          };
+        }).filter((b: any) => b.roomId !== "");
       } else if (apiKey === "tenants") {
-        array = array.map((t: any) => ({ 
-          ...t, 
-          startDate: normalizeDate(t.startDate),
-          startWater: Number(t.startWater) || 0,
-          startElec: Number(t.startElec) || 0
-        }));
+        array = array.map((t: any) => {
+          const tid = t.id ? t.id.toString() : "";
+          const roomId = t.roomId ? t.roomId.toString() : (tid ? tenantToRoomMap[tid] : "");
+          return { 
+            ...t, 
+            roomId,
+            name: t.name ? t.name.toString() : "",
+            phone: t.phone ? t.phone.toString() : "",
+            startDate: normalizeDate(t.startDate),
+            startWater: Number(t.startWater) || 0,
+            startElec: Number(t.startElec) || 0,
+            status: t.status === "ใช้งาน" || t.status === "ยกเลิกสัญญา" ? t.status : "ใช้งาน"
+          };
+        }).filter((t: any) => t.roomId !== "");
+      } else if (apiKey === "banks") {
+        array = array.map((bank: any) => ({
+          ...bank,
+          id: bank.id ? bank.id.toString() : "",
+          bankName: bank.bankName ? bank.bankName.toString() : "",
+          accountNumber: bank.accountNumber ? bank.accountNumber.toString() : "",
+          accountName: bank.accountName || bank.accountHolder || "",
+          footerNote: bank.footerNote || bank.qrCodeUrl || ""
+        })).filter((bank: any) => bank.id !== "");
       } else if (apiKey === "payments") {
         array = array.map((p: any) => ({ 
           ...p, 
+          payId: p.payId || p.id || `P${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          billId: p.billId ? p.billId.toString() : "",
           date: normalizeDate(p.date),
-          amount: Number(p.amount) || 0
-        }));
+          amount: Number(p.amount) || 0,
+          method: p.method || "โอนธนาคาร",
+          receiver: p.receiver || "แอดมิน",
+          note: p.note || p.notes || p.proofUrl || ""
+        })).filter((p: any) => p.billId !== "");
       }
       localStorage.setItem(localKey, JSON.stringify(array));
     }
