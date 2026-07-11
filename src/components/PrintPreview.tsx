@@ -644,76 +644,76 @@ export default function PrintPreview({
             </table>
 
             {/* Main Billing Summary Table */}
-            <table className="w-full border-collapse border border-black text-[10px] font-sans leading-tight">
-              <thead className="bg-[#f2f2f2] text-black text-[9px] font-bold border border-black leading-tight">
+            <table className="w-full border-collapse border border-black text-xs md:text-sm font-sans leading-normal">
+              <thead className="bg-[#f2f2f2] text-black text-[10px] md:text-xs font-bold border border-black leading-normal">
                 <tr className="border-b border-black bg-slate-50">
-                  <th rowSpan={2} className="border-r border-black text-center align-middle px-2 py-3 font-black text-black w-[13%]">
+                  <th rowSpan={2} className="border-r border-black text-left align-middle px-3 py-3.5 font-black text-black w-[16%]">
                     ชื่อ-นามสกุล
                   </th>
-                  <th rowSpan={2} className="border-r border-black text-center align-middle px-1 py-1 font-black text-black leading-tight w-[8%]">
+                  <th rowSpan={2} className="border-r border-black text-center align-middle px-1 py-1 font-black text-black leading-tight w-[9%]">
                     <div className="font-black">ค่าเช่า</div>
-                    <div className="text-[8px] text-slate-500 font-bold mt-1">ค่าขยะ</div>
+                    <div className="text-[9px] text-slate-500 font-bold mt-1">ค่าขยะ</div>
                   </th>
                   
                   {/* ค่าน้ำ */}
-                  <th colSpan={2} className="border-r border-black text-center bg-[#b4c6e7] text-black font-black py-1.5 w-[12%]">
+                  <th colSpan={2} className="border-r border-black text-center bg-[#b4c6e7] text-black font-black py-2 w-[10%]">
                     ค่าน้ำ
                   </th>
-                  <th className="border-r border-black text-center bg-[#d9e1f2] text-black font-bold py-1.5 w-[5%]">
+                  <th className="border-r border-black text-center bg-[#d9e1f2] text-black font-bold py-2 w-[4%]">
                     หน่วยละ
                   </th>
-                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-1.5 w-[8%]">
+                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-2 w-[8%] text-xs md:text-sm">
                     {appliedRate.waterRate}
                   </th>
 
                   {/* ค่าไฟฟ้า */}
-                  <th colSpan={2} className="border-r border-black text-center bg-[#c6e0b4] text-black font-black py-1.5 w-[12%]">
+                  <th colSpan={2} className="border-r border-black text-center bg-[#c6e0b4] text-black font-black py-2 w-[10%]">
                     ค่าไฟฟ้า
                   </th>
-                  <th className="border-r border-black text-center bg-[#e2efda] text-black font-bold py-1.5 w-[5%]">
+                  <th className="border-r border-black text-center bg-[#e2efda] text-black font-bold py-2 w-[4%]">
                     หน่วยละ
                   </th>
-                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-1.5 w-[8%]">
+                  <th className="border-r border-black text-center bg-[#f2f2f2] text-blue-800 font-black py-2 w-[8%] text-xs md:text-sm">
                     {appliedRate.elecRate}
                   </th>
 
                   {/* ยอดค้างชำระ */}
-                  <th className="border-r border-black text-center bg-[#fff2cc] text-black font-black py-1.5 w-[8%]">
+                  <th className="border-r border-black text-center bg-[#fff2cc] text-black font-black py-2 w-[8%]">
                     ยอดค้างชำระ
                   </th>
 
                   {/* อื่นๆ */}
-                  <th colSpan={2} className="border-r border-black text-center bg-[#f2f2f2] text-black font-black py-1.5 w-[14%]">
+                  <th colSpan={2} className="border-r border-black text-center bg-[#f2f2f2] text-black font-black py-2 w-[13%]">
                     อื่นๆ
                   </th>
 
                   {/* รวม */}
-                  <th rowSpan={2} className="text-center align-middle bg-[#1f4e79] text-white font-black px-2 py-3 w-[12%]">
+                  <th rowSpan={2} className="text-center align-middle bg-[#1f4e79] text-white font-black px-2 py-3.5 w-[10%] text-xs md:text-sm">
                     รวม
                   </th>
                 </tr>
 
                 <tr className="border-b border-black bg-slate-50">
                   {/* ค่าน้ำ subheadings */}
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งก่อน</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งหลัง</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">จำนวนที่ใช้</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-blue-800 bg-[#d9e1f2]">เป็นจำนวน</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">เลขครั้งก่อน</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">เลขครั้งหลัง</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">จำนวนที่ใช้</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9.5px] md:text-[10.5px] font-black text-blue-800 bg-[#d9e1f2]">เป็นจำนวน</th>
 
                   {/* ค่าไฟฟ้า subheadings */}
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งก่อน</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">เลขครั้งหลัง</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600">จำนวนที่ใช้</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-blue-800 bg-[#e2efda]">เป็นจำนวน</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">เลขครั้งก่อน</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">เลขครั้งหลัง</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600">จำนวนที่ใช้</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9.5px] md:text-[10.5px] font-black text-blue-800 bg-[#e2efda]">เป็นจำนวน</th>
 
                   {/* ยอดค้างชำระ subheading */}
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-black text-rose-700 bg-[#fff2cc]">
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-black text-rose-700 bg-[#fff2cc]">
                     {getThaiMonthYear(month, -1)}
                   </th>
 
                   {/* อื่นๆ subheadings */}
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600 font-sans">รายการ</th>
-                  <th className="border-r border-black text-center py-1 text-[8.5px] font-bold text-slate-600 font-sans">จำนวนเงิน</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600 font-sans">รายการ</th>
+                  <th className="border-r border-black text-center py-1.5 text-[9px] md:text-[10px] font-bold text-slate-600 font-sans">จำนวนเงิน</th>
                 </tr>
               </thead>
               <tbody>
@@ -736,48 +736,48 @@ export default function PrintPreview({
                   };
 
                   return (
-                    <tr key={b.billId} className="border-b border-black hover:bg-slate-50/50 text-slate-900 font-medium">
-                      {/* Name / Room */}
-                      <td className="px-2 py-1.5 border-r border-black font-semibold text-slate-800 font-sans text-center">
+                    <tr key={b.billId} className="border-b border-black hover:bg-slate-50/50 text-slate-900 font-bold text-xs md:text-sm">
+                      {/* Name / Room - Left-aligned with padding */}
+                      <td className="px-3 py-3 border-r border-black font-bold text-slate-950 font-sans text-left">
                         {room ? room.name : `ห้อง ${b.roomName}`} {tenant ? `(${tenant.name})` : ""}
                       </td>
                       
                       {/* Rent */}
-                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-slate-800">
+                      <td className="px-2 py-3 border-r border-black text-right font-mono font-bold text-slate-950">
                         {formatVal(b.rentCost)}
                       </td>
 
                       {/* Water: prev, curr, units, amount */}
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{prevWater}</td>
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{currWater}</td>
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-900 font-bold">{b.waterUnits}</td>
-                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-rose-600 bg-[#d9e1f2]/20">
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-800">{prevWater}</td>
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-800">{currWater}</td>
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-950 font-black text-xs md:text-sm">{b.waterUnits}</td>
+                      <td className="px-2 py-3 border-r border-black text-right font-mono font-black text-rose-700 bg-[#d9e1f2]/20">
                         {formatVal(b.waterCost)}
                       </td>
 
                       {/* Elec: prev, curr, units, amount */}
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{prevElec}</td>
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-700">{currElec}</td>
-                      <td className="px-1 py-1.5 border-r border-black text-center font-mono text-slate-900 font-bold">{b.elecUnits}</td>
-                      <td className="px-2 py-1.5 border-r border-black text-right font-mono font-bold text-rose-600 bg-[#e2efda]/20">
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-800">{prevElec}</td>
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-800">{currWater}</td>
+                      <td className="px-1 py-3 border-r border-black text-center font-mono text-slate-950 font-black text-xs md:text-sm">{b.elecUnits}</td>
+                      <td className="px-2 py-3 border-r border-black text-right font-mono font-black text-rose-700 bg-[#e2efda]/20">
                         {formatVal(b.elecCost)}
                       </td>
 
                       {/* Overdue */}
-                      <td className="px-2 py-1.5 border-r border-black text-right font-mono text-rose-600 bg-amber-50/10">
+                      <td className="px-2 py-3 border-r border-black text-right font-mono text-rose-700 font-black bg-amber-50/10">
                         {formatVal(b.prevUnpaid)}
                       </td>
 
                       {/* Others: list names & cost */}
-                      <td className="px-1.5 py-1.5 border-r border-black font-sans text-[8.5px] leading-tight text-slate-600">
+                      <td className="px-2 py-3 border-r border-black font-sans text-[10px] md:text-xs leading-normal text-slate-700">
                         {addedNames || ""}
                       </td>
-                      <td className="px-2 py-1.5 border-r border-black text-right font-mono text-rose-600">
+                      <td className="px-2 py-3 border-r border-black text-right font-mono text-rose-700 font-bold">
                         {formatVal(b.addedCost)}
                       </td>
 
                       {/* Total */}
-                      <td className="px-2 py-1.5 text-right font-mono font-black text-rose-600 bg-slate-50">
+                      <td className="px-2 py-3 text-right font-mono font-black text-rose-700 bg-slate-50 text-xs md:text-sm">
                         {formatVal(b.total, false)}
                       </td>
                     </tr>
@@ -801,55 +801,55 @@ export default function PrintPreview({
                   };
 
                   return (
-                    <tr className="bg-[#fff2cc] font-black text-slate-900 text-[10px] border-t-2 border-black border-b border-black">
-                      {/* รวม label */}
-                      <td className="px-2 py-2 border-r border-black text-center font-black text-slate-900 font-sans">
+                    <tr className="bg-[#fff2cc] font-black text-slate-950 text-xs md:text-sm border-t-2 border-black border-b border-black">
+                      {/* รวม label - Left-aligned with padding */}
+                      <td className="px-3 py-3.5 border-r border-black text-left font-black text-slate-950 font-sans">
                         รวม
                       </td>
 
                       {/* Total rent */}
-                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                      <td className="px-2 py-3.5 border-r border-black text-right font-mono font-black text-rose-700 text-xs md:text-sm">
                         {formatVal(totalRent, false)}
                       </td>
 
                       {/* ค่าน้ำ prefix & units */}
-                      <td colSpan={2} className="px-1 py-2 border-r border-black text-center text-[#2e75b6] font-sans font-black text-[9.5px]">
+                      <td colSpan={2} className="px-1 py-3.5 border-r border-black text-center text-[#2e75b6] font-sans font-black text-[11px] md:text-xs">
                         ค่าน้ำ
                       </td>
-                      <td className="px-1 py-2 border-r border-black text-center font-mono font-black text-[#2e75b6] text-[9.5px]">
+                      <td className="px-1 py-3.5 border-r border-black text-center font-mono font-black text-[#2e75b6] text-[11px] md:text-xs">
                         {totalWaterUnits} หน่วย
                       </td>
                       {/* ค่าน้ำ total cost */}
-                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                      <td className="px-2 py-3.5 border-r border-black text-right font-mono font-black text-rose-700 text-xs md:text-sm">
                         {formatVal(totalWaterCost, false)}
                       </td>
 
                       {/* ค่าไฟฟ้า prefix & units */}
-                      <td colSpan={2} className="px-1 py-2 border-r border-black text-center text-[#548235] font-sans font-black text-[9.5px]">
+                      <td colSpan={2} className="px-1 py-3.5 border-r border-black text-center text-[#548235] font-sans font-black text-[11px] md:text-xs">
                         ค่าไฟฟ้า
                       </td>
-                      <td className="px-1 py-2 border-r border-black text-center font-mono font-black text-[#548235] text-[9.5px]">
+                      <td className="px-1 py-3.5 border-r border-black text-center font-mono font-black text-[#548235] text-[11px] md:text-xs">
                         {totalElecUnits} หน่วย
                       </td>
                       {/* ค่าไฟฟ้า total cost */}
-                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                      <td className="px-2 py-3.5 border-r border-black text-right font-mono font-black text-rose-700 text-xs md:text-sm">
                         {formatVal(totalElecCost, false)}
                       </td>
 
                       {/* Overdue total */}
-                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                      <td className="px-2 py-3.5 border-r border-black text-right font-mono font-black text-rose-700 text-xs md:text-sm">
                         {formatVal(totalPrevUnpaid)}
                       </td>
 
                       {/* Others items empty */}
-                      <td className="px-1 py-2 border-r border-black text-center font-sans"></td>
+                      <td className="px-1 py-3.5 border-r border-black text-center font-sans"></td>
                       {/* Others total cost */}
-                      <td className="px-2 py-2 border-r border-black text-right font-mono font-black text-rose-700">
+                      <td className="px-2 py-3.5 border-r border-black text-right font-mono font-black text-rose-700 text-xs md:text-sm">
                         {formatVal(totalAddedCost)}
                       </td>
 
                       {/* Grand sum total of totals */}
-                      <td className="px-2 py-2 text-right font-mono font-black text-rose-700 text-xs bg-[#ffe699] border-l border-black">
+                      <td className="px-2 py-3.5 text-right font-mono font-black text-rose-800 text-sm md:text-base bg-[#ffe699] border-l border-black">
                         {formatVal(totalSum, false)}
                       </td>
                     </tr>
