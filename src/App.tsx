@@ -703,7 +703,7 @@ export default function App() {
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
                     <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Dorm Ops Portal</span>
-                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.4</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.6</span>
                     </p>
                   </div>
                 </div>
@@ -797,7 +797,7 @@ export default function App() {
               <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
               <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Dorm Ops Portal</span>
-                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.4</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.6</span>
               </p>
             </div>
           )}

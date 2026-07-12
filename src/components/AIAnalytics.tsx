@@ -279,12 +279,37 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
       const roomBills = bills.filter(
         b => b.month && b.month.endsWith("-" + selectedCalendarMonth) && b.roomId === room.id
       );
-      const billCount = roomBills.length;
 
-      const totalWaterUnits = roomBills.reduce((sum, b) => sum + (b.waterUnits || 0), 0);
-      const totalWaterCost = roomBills.reduce((sum, b) => sum + (b.waterCost || 0), 0);
-      const totalElecUnits = roomBills.reduce((sum, b) => sum + (b.elecUnits || 0), 0);
-      const totalElecCost = roomBills.reduce((sum, b) => sum + (b.elecCost || 0), 0);
+      // Helper to check if a meter is broken for a month
+      const isMeterBrokenForMonth = (month: string) => {
+        const mReading = meters.find(m => m.roomId === room.id && m.month === month);
+        if (!mReading) return false;
+        const note = (mReading.note || "").toLowerCase();
+        return note.includes("เสีย") || note.includes("ชำรุด") || note.includes("พัง") || note.includes("broken") || note.includes("faulty");
+      };
+
+      // Filter out bills where water is 0 or meter is marked as broken/faulty
+      const validWaterBills = roomBills.filter(b => (b.waterUnits || 0) > 0 && !isMeterBrokenForMonth(b.month));
+      // Filter out bills where electricity is 0 or meter is marked as broken/faulty
+      const validElecBills = roomBills.filter(b => (b.elecUnits || 0) > 0 && !isMeterBrokenForMonth(b.month));
+
+      const waterUnitsList = validWaterBills.map(b => b.waterUnits || 0);
+      const waterCostList = validWaterBills.map(b => b.waterCost || 0);
+      const waterCount = validWaterBills.length;
+
+      const elecUnitsList = validElecBills.map(b => b.elecUnits || 0);
+      const elecCostList = validElecBills.map(b => b.elecCost || 0);
+      const elecCount = validElecBills.length;
+
+      const avgWaterUnits = waterCount > 0 ? Math.round((waterUnitsList.reduce((s, v) => s + v, 0) / waterCount) * 10) / 10 : 0;
+      const avgWaterCost = waterCount > 0 ? Math.round(waterCostList.reduce((s, v) => s + v, 0) / waterCount) : 0;
+      const maxWaterUnits = waterCount > 0 ? Math.max(...waterUnitsList) : 0;
+      const minWaterUnits = waterCount > 0 ? Math.min(...waterUnitsList) : 0;
+
+      const avgElecUnits = elecCount > 0 ? Math.round((elecUnitsList.reduce((s, v) => s + v, 0) / elecCount) * 10) / 10 : 0;
+      const avgElecCost = elecCount > 0 ? Math.round(elecCostList.reduce((s, v) => s + v, 0) / elecCount) : 0;
+      const maxElecUnits = elecCount > 0 ? Math.max(...elecUnitsList) : 0;
+      const minElecUnits = elecCount > 0 ? Math.min(...elecUnitsList) : 0;
 
       const activeTenant = tenants?.find(t => t.roomId === room.id && t.status === "ใช้งาน");
       const tenantName = activeTenant ? activeTenant.name : (roomBills[roomBills.length - 1]?.tenantName || "ไม่มีผู้เช่าปัจจุบัน");
@@ -293,14 +318,18 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
         roomId: room.id,
         tenantName,
         durationTh: getRoomDuration(room.id),
-        avgWaterUnits: billCount > 0 ? Math.round((totalWaterUnits / billCount) * 10) / 10 : 0,
-        avgWaterCost: billCount > 0 ? Math.round(totalWaterCost / billCount) : 0,
-        avgElecUnits: billCount > 0 ? Math.round((totalElecUnits / billCount) * 10) / 10 : 0,
-        avgElecCost: billCount > 0 ? Math.round(totalElecCost / billCount) : 0,
-        billCount
+        avgWaterUnits,
+        avgWaterCost,
+        maxWaterUnits,
+        minWaterUnits,
+        avgElecUnits,
+        avgElecCost,
+        maxElecUnits,
+        minElecUnits,
+        billCount: roomBills.length
       };
     });
-  }, [rooms, bills, selectedCalendarMonth, tenants]);
+  }, [rooms, bills, selectedCalendarMonth, tenants, meters]);
 
   // Search filter
   const filteredRoomComparison = useMemo(() => {
@@ -690,14 +719,14 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
                           setShowDetailedRooms(true);
                         }
                       }}
-                      className={`cursor-pointer border p-3 rounded-xl transition-all duration-150 flex flex-col justify-between ${
+                      className={`cursor-pointer border px-3 py-2.5 rounded-xl transition-all duration-150 flex items-center justify-between gap-3 ${
                         isSelected 
                           ? "bg-blue-50/70 border-blue-500 shadow-sm ring-1 ring-blue-500/20" 
                           : "bg-slate-50/50 hover:bg-slate-50 border-slate-100/70 hover:border-slate-200"
                       }`}
                     >
-                      <div>
-                        <div className="flex items-center justify-between">
+                      <div className="shrink-0">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-800">
                             {item.monthNameTh}
                           </span>
@@ -705,29 +734,29 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
                             <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping" />
                           )}
                         </div>
-                        <span className="text-[8px] text-slate-400 font-bold block mb-1.5">
+                        <span className="text-[8px] text-slate-400 font-bold block mt-0.5">
                           ประวัติสะสม {item.yearsRecorded} ปี
                         </span>
                       </div>
                       
-                      {/* Compact stacked water & electricity values */}
-                      <div className="space-y-1 mt-1.5 border-t border-slate-100/80 pt-2">
-                        <div className="flex items-center justify-between text-[10px]">
+                      {/* Compact stacked water & electricity values next to the month name */}
+                      <div className="space-y-1 text-right flex-1 min-w-0">
+                        <div className="flex items-center justify-end gap-1.5 text-[10px]">
                           <span className="text-slate-400 font-semibold flex items-center gap-1">
-                            <Droplet className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <Droplet className="w-3 h-3 text-blue-500 shrink-0" />
                             <span>น้ำเฉลี่ย</span>
                           </span>
-                          <span className="font-extrabold text-blue-600 font-mono">
+                          <span className="font-extrabold text-blue-600 font-mono whitespace-nowrap">
                             {item.avgWater.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
                           </span>
                         </div>
                         
-                        <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center justify-end gap-1.5 text-[10px]">
                           <span className="text-slate-400 font-semibold flex items-center gap-1">
-                            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <Zap className="w-3 h-3 text-amber-500 shrink-0" />
                             <span>ไฟเฉลี่ย</span>
                           </span>
-                          <span className="font-extrabold text-amber-600 font-mono">
+                          <span className="font-extrabold text-amber-600 font-mono whitespace-nowrap">
                             {item.avgElec.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
                           </span>
                         </div>
@@ -823,18 +852,35 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
                           </div>
 
                           {/* Averages and Costs */}
-                          <div className="space-y-1.5 pt-1">
-                            <div className="flex items-start gap-1.5 text-xs text-slate-700 font-medium">
-                              <span className="text-blue-500 font-black shrink-0 mt-0.5">•</span>
-                              <span>
-                                ค่าน้ำ เดือน {parseInt(selectedCalendarMonth)} เฉลี่ย <span className="font-extrabold text-blue-600 font-mono">{item.avgWaterUnits}</span> หน่วย คิดเป็น <span className="font-extrabold text-blue-700 font-mono">{item.avgWaterCost}</span> บาท
-                              </span>
+                          <div className="space-y-2 pt-1 border-t border-slate-100/60 mt-1">
+                            {/* Water Averages, Min, Max */}
+                            <div className="space-y-0.5 text-xs text-slate-700">
+                              <div className="flex items-start gap-1.5 font-semibold">
+                                <span className="text-blue-500 font-black shrink-0 mt-0.5">•</span>
+                                <span>
+                                  ค่าน้ำเฉลี่ย: <span className="font-extrabold text-blue-600 font-mono">{item.avgWaterUnits.toLocaleString("th-TH")}</span> หน่วย <span className="text-slate-400">({item.avgWaterCost.toLocaleString("th-TH")} บาท)</span>
+                                </span>
+                              </div>
+                              <div className="pl-3.5 flex items-center gap-3 text-[10px] text-slate-500 font-bold">
+                                <span>ต่ำสุด: <span className="font-extrabold text-blue-500 font-mono">{item.minWaterUnits.toLocaleString("th-TH")}</span> หน่วย</span>
+                                <span className="text-slate-300">|</span>
+                                <span>สูงสุด: <span className="font-extrabold text-indigo-600 font-mono">{item.maxWaterUnits.toLocaleString("th-TH")}</span> หน่วย</span>
+                              </div>
                             </div>
-                            <div className="flex items-start gap-1.5 text-xs text-slate-700 font-medium">
-                              <span className="text-amber-500 font-black shrink-0 mt-0.5">•</span>
-                              <span>
-                                ค่าไฟ เดือน {parseInt(selectedCalendarMonth)} เฉลี่ย <span className="font-extrabold text-amber-600 font-mono">{item.avgElecUnits}</span> หน่วย คิดเป็น <span className="font-extrabold text-amber-700 font-mono">{item.avgElecCost}</span> บาท
-                              </span>
+
+                            {/* Electricity Averages, Min, Max */}
+                            <div className="space-y-0.5 text-xs text-slate-700">
+                              <div className="flex items-start gap-1.5 font-semibold">
+                                <span className="text-amber-500 font-black shrink-0 mt-0.5">•</span>
+                                <span>
+                                  ค่าไฟเฉลี่ย: <span className="font-extrabold text-amber-600 font-mono">{item.avgElecUnits.toLocaleString("th-TH")}</span> หน่วย <span className="text-slate-400">({item.avgElecCost.toLocaleString("th-TH")} บาท)</span>
+                                </span>
+                              </div>
+                              <div className="pl-3.5 flex items-center gap-3 text-[10px] text-slate-500 font-bold">
+                                <span>ต่ำสุด: <span className="font-extrabold text-amber-500 font-mono">{item.minElecUnits.toLocaleString("th-TH")}</span> หน่วย</span>
+                                <span className="text-slate-300">|</span>
+                                <span>สูงสุด: <span className="font-extrabold text-orange-600 font-mono">{item.maxElecUnits.toLocaleString("th-TH")}</span> หน่วย</span>
+                              </div>
                             </div>
                           </div>
 
