@@ -89,7 +89,8 @@ import {
   getLastSyncTime, 
   pushToGoogleSheets, 
   pullFromGoogleSheets,
-  DEFAULT_GS_URL
+  DEFAULT_GS_URL,
+  pullDirectFromGoogleSheets
 } from "./sheetsSync";
 
 export default function App() {
@@ -176,8 +177,49 @@ export default function App() {
       }
     }
 
-    // Auto-pull on startup is disabled to protect local unsynced edits and maintain local state stability.
-    // Sync can be initiated manually via the settings menu.
+    // Auto-pull from Google Sheets on app startup (as requested: "เมื่อเปิดแอป ให้โหลดข้อมูลจาก google sheet ทันที่ ไม่ต้องรอเข้าระบบ")
+    const autoPullFromSheetsOnLoad = async () => {
+      // A. Try direct Google Sheets OAuth API first if credentials exist
+      const directSheetId = localStorage.getItem("sabaidee_dorm_direct_sheet_id");
+      const googleToken = localStorage.getItem("sabaidee_dorm_google_token");
+      
+      if (directSheetId && googleToken) {
+        console.log("Auto-pulling from Direct Google Sheets OAuth API...");
+        try {
+          const result = await pullDirectFromGoogleSheets(directSheetId, googleToken);
+          if (result.success) {
+            console.log("Auto-pull startup success (Direct API):", result.message);
+            setLastSyncTimeState(getLastSyncTime());
+            refreshAllState();
+            return;
+          } else {
+            console.warn("Auto-pull startup failed (Direct API):", result.message);
+          }
+        } catch (error) {
+          console.warn("Auto-pull startup error (Direct API):", error);
+        }
+      }
+
+      // B. Fallback/Standard: Pull from Google Sheets using Web App (Apps Script URL)
+      const targetUrl = initialUrl || getGsUrl();
+      if (targetUrl) {
+        console.log("Auto-pulling from Google Sheets Apps Script Web App...");
+        try {
+          const result = await pullFromGoogleSheets(targetUrl);
+          if (result.success) {
+            console.log("Auto-pull startup success (Apps Script):", result.message);
+            setLastSyncTimeState(getLastSyncTime());
+            refreshAllState();
+          } else {
+            console.warn("Auto-pull startup failed (Apps Script):", result.message);
+          }
+        } catch (error) {
+          console.warn("Auto-pull startup error (Apps Script):", error);
+        }
+      }
+    };
+
+    autoPullFromSheetsOnLoad();
   }, []);
 
   // Whenever the month or general mutations occur, reload dependent states
@@ -582,7 +624,7 @@ export default function App() {
             <h1 className="text-sm font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
             <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
               <span>Dorm Ops Portal</span>
-              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
             </p>
           </div>
         </div>
@@ -633,7 +675,7 @@ export default function App() {
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
                     <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Dorm Ops Portal</span>
-                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
                     </p>
                   </div>
                 </div>
@@ -727,7 +769,7 @@ export default function App() {
               <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
               <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Dorm Ops Portal</span>
-                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.0</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
               </p>
             </div>
           )}

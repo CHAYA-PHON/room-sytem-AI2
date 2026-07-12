@@ -340,3 +340,267 @@ function applyPulledData(data: any) {
     }
   }
 }
+
+// =========================================================================
+// DIRECT OAUTH GOOGLE SHEETS & DRIVE API INTEGRATIONS
+// =========================================================================
+
+export const SHEETS_CONFIG: Record<string, { sheetName: string; headers: string[] }> = {
+  rooms: {
+    sheetName: "Rooms",
+    headers: ["id", "name", "rent", "minWater", "minElec", "payMethod", "bankId", "note"]
+  },
+  tenants: {
+    sheetName: "Tenants",
+    headers: ["roomId", "name", "phone", "startDate", "startWater", "startElec", "status"]
+  },
+  meters: {
+    sheetName: "Meters",
+    headers: ["meterId", "roomId", "month", "prevWater", "currWater", "prevElec", "currElec", "note", "recordedBy", "recordedDate"]
+  },
+  added_items: {
+    sheetName: "Added_Items",
+    headers: ["id", "roomId", "month", "name", "amount", "note"]
+  },
+  bills: {
+    sheetName: "Bills",
+    headers: ["billId", "roomId", "roomName", "tenantName", "month", "waterUnits", "waterCost", "elecUnits", "elecCost", "rentCost", "addedCost", "prevUnpaid", "total", "paid", "balance", "status", "createdDate"]
+  },
+  banks: {
+    sheetName: "Banks",
+    headers: ["id", "bankName", "accountNumber", "accountName", "footerNote"]
+  },
+  payments: {
+    sheetName: "Payments",
+    headers: ["payId", "billId", "date", "amount", "method", "receiver", "note"]
+  },
+  admins: {
+    sheetName: "Admins",
+    headers: ["id", "username", "pin"]
+  },
+  owner_info: {
+    sheetName: "Owner_Info",
+    headers: ["name", "phone"]
+  }
+};
+
+/**
+ * Direct push using Google Sheets REST API
+ */
+export async function pushDirectToGoogleSheets(
+  spreadsheetId: string,
+  token: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Fetch spreadsheet metadata to check available sheets
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!metaRes.ok) {
+      const errorData = await metaRes.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `ไม่สามารถดึงข้อมูลแผ่นงานได้ (รหัสตอบกลับ ${metaRes.status})`);
+    }
+
+    const metadata = await metaRes.json();
+    const existingSheetNames = (metadata.sheets || []).map((s: any) => s.properties?.title);
+
+    // 2. Detect and add missing sheets
+    const sheetsToAdd = Object.values(SHEETS_CONFIG)
+      .map(config => config.sheetName)
+      .filter(name => !existingSheetNames.includes(name));
+
+    if (sheetsToAdd.length > 0) {
+      const addRequests = sheetsToAdd.map(name => ({
+        addSheet: {
+          properties: { title: name }
+        }
+      }));
+
+      const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ requests: addRequests })
+      });
+
+      if (!updateRes.ok) {
+        throw new Error("ล้มเหลวในการสร้างชีตย่อยใหม่บนไฟล์ Google Sheets");
+      }
+    }
+
+    // 3. Clear data ranges to prevent overlapping rows
+    const clearRanges = Object.values(SHEETS_CONFIG).map(config => `${config.sheetName}!A2:Z1000`);
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ranges: clearRanges })
+    });
+
+    // 4. Construct payload for batch update values
+    const dataUpdates = Object.entries(SHEETS_CONFIG).map(([apiKey, config]) => {
+      const localKey = `dorm_${apiKey}`;
+      const localData = getLocalTable(localKey);
+      
+      const rows: any[][] = [];
+      // Row 1: Headers
+      rows.push(config.headers);
+
+      // Remaining rows: Data
+      localData.forEach((item: any) => {
+        const row: any[] = [];
+        config.headers.forEach(header => {
+          let val = item[header];
+          if (val === undefined || val === null) {
+            row.push("");
+          } else if (typeof val === "boolean") {
+            row.push(val ? "TRUE" : "FALSE");
+          } else if (typeof val === "object") {
+            row.push(JSON.stringify(val));
+          } else {
+            row.push(val);
+          }
+        });
+        rows.push(row);
+      });
+
+      return {
+        range: `${config.sheetName}!A1`,
+        values: rows
+      };
+    });
+
+    // Handle Owner Info separately since it is an object in local storage, not an array
+    const ownerInfoIdx = dataUpdates.findIndex(u => u.range.startsWith("Owner_Info!"));
+    if (ownerInfoIdx !== -1) {
+      const info = getOwnerInfo();
+      dataUpdates[ownerInfoIdx].values = [
+        ["name", "phone"],
+        [info.name || "", info.phone || ""]
+      ];
+    }
+
+    const updateValuesRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        valueInputOption: "USER_ENTERED",
+        data: dataUpdates
+      })
+    });
+
+    if (!updateValuesRes.ok) {
+      const err = await updateValuesRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || "ล้มเหลวในการส่งข้อมูลดิบขึ้นเซลล์ชีต");
+    }
+
+    const timeStr = new Date().toLocaleString("th-TH");
+    setLastSyncTime(timeStr);
+
+    return {
+      success: true,
+      message: `บันทึกข้อมูลและซิงค์ตรงไปยัง Google Sheets สำเร็จเมื่อเวลา ${timeStr}`
+    };
+  } catch (error: any) {
+    console.error("Direct sheet sync push failed:", error);
+    return {
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ Google Sheets API"
+    };
+  }
+}
+
+/**
+ * Direct pull using Google Sheets REST API
+ */
+export async function pullDirectFromGoogleSheets(
+  spreadsheetId: string,
+  token: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const ranges = Object.values(SHEETS_CONFIG).map(config => `${config.sheetName}!A1:Z1000`);
+    const rangesQuery = ranges.map(r => `ranges=${encodeURIComponent(r)}`).join("&");
+
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${rangesQuery}&valueRenderOption=UNFORMATTED_VALUE`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || "ล้มเหลวในการอ่านข้อมูลจากชีต");
+    }
+
+    const data = await res.json();
+    const valueRanges = data.valueRanges || [];
+
+    const pulledPayload: Record<string, any[]> = {};
+
+    Object.entries(SHEETS_CONFIG).forEach(([apiKey, config]) => {
+      // Find the value range matching the sheet name
+      const rangeObj = valueRanges.find((vr: any) => vr.range && vr.range.startsWith(`${config.sheetName}!`));
+      if (!rangeObj || !rangeObj.values || rangeObj.values.length <= 1) {
+        pulledPayload[apiKey] = [];
+        return;
+      }
+
+      const fileRows = rangeObj.values;
+      const headers = fileRows[0].map((h: any) => h ? h.toString().trim() : "");
+      const records: any[] = [];
+
+      for (let i = 1; i < fileRows.length; i++) {
+        const row = fileRows[i];
+        const record: Record<string, any> = {};
+        let hasData = false;
+
+        headers.forEach((h: string, colIdx: number) => {
+          if (!h) return;
+          const cellVal = row[colIdx];
+          if (cellVal !== undefined && cellVal !== null && cellVal !== "") {
+            hasData = true;
+            if (cellVal === "TRUE" || cellVal === true) {
+              record[h] = true;
+            } else if (cellVal === "FALSE" || cellVal === false) {
+              record[h] = false;
+            } else {
+              record[h] = cellVal;
+            }
+          }
+        });
+
+        if (hasData) {
+          records.push(record);
+        }
+      }
+
+      pulledPayload[apiKey] = records;
+    });
+
+    // Direct apply of pulled data tables
+    applyPulledData(pulledPayload);
+    const timeStr = new Date().toLocaleString("th-TH");
+    setLastSyncTime(timeStr);
+
+    return {
+      success: true,
+      message: `ดึงข้อมูลตรงจาก Google Sheets ลงระบบสำเร็จเมื่อเวลา ${timeStr}`
+    };
+  } catch (error: any) {
+    console.error("Direct sheet sync pull failed:", error);
+    return {
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการโหลดข้อมูลจาก Google Sheets API"
+    };
+  }
+}
+
