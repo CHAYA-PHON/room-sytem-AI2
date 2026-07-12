@@ -1,24 +1,24 @@
-import React, { useState } from "react";
-import { Room, Bill, MeterReading, PaymentRecord } from "../types";
+import React, { useState, useMemo } from "react";
+import { Room, Bill, MeterReading, PaymentRecord, Tenant } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Cpu, 
-  Sparkles, 
   TrendingUp, 
   TrendingDown, 
-  AlertTriangle, 
-  CheckCircle, 
-  Gauge, 
   Droplet, 
   Zap, 
-  DollarSign,
-  Activity,
-  Layers,
-  HelpCircle,
+  Activity, 
+  Calendar, 
+  Info, 
+  DoorClosed,
+  ChevronRight,
+  Sparkles,
+  ArrowRight,
+  FileSpreadsheet,
+  Gauge,
+  Search,
+  SlidersHorizontal,
   Clock,
-  Key,
-  Eye,
-  EyeOff
+  User
 } from "lucide-react";
 
 interface AIAnalyticsProps {
@@ -26,819 +26,919 @@ interface AIAnalyticsProps {
   bills: Bill[];
   meters: MeterReading[];
   payments: PaymentRecord[];
+  tenants: Tenant[];
 }
 
-interface AIAverages {
-  roomId: string;
-  roomName: string;
-  avgWaterUnits: number;
-  avgWaterCost: number;
-  avgElecUnits: number;
-  avgElecCost: number;
-}
+export default function AIAnalytics({ rooms, bills, meters, payments, tenants }: AIAnalyticsProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCalendarMonthTab, setSelectedCalendarMonthTab] = useState<"water" | "elec">("water");
+  const [activeAnalysisView, setActiveAnalysisView] = useState<"comparison" | "seasonal" | "rooms">("comparison");
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<string>("06");
+  const [showDetailedRooms, setShowDetailedRooms] = useState<boolean>(false);
 
-interface AITrend {
-  roomId: string;
-  roomName: string;
-  waterTrend: "increasing" | "decreasing" | "stable" | string;
-  elecTrend: "increasing" | "decreasing" | "stable" | string;
-  predictedWaterNextMonth: number;
-  predictedElecNextMonth: number;
-  trendNarrative: string;
-}
+  // Retrieve list of unique months sorted chronologically
+  const uniqueMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    bills.forEach(b => {
+      if (b.month) monthsSet.add(b.month);
+    });
+    meters.forEach(m => {
+      if (m.month) monthsSet.add(m.month);
+    });
+    return Array.from(monthsSet).sort();
+  }, [bills, meters]);
 
-interface AILatePayment {
-  roomId: string;
-  roomName: string;
-  paymentStatusSummary: string;
-  riskLevel: "low" | "medium" | "high" | string;
-  riskDetails: string;
-}
+  // Default comparison months: latest month and the one before it
+  const [targetMonth, setTargetMonth] = useState<string>(() => {
+    return uniqueMonths.length > 0 ? uniqueMonths[uniqueMonths.length - 1] : "2026-07";
+  });
+  
+  const [compareMonth, setCompareMonth] = useState<string>(() => {
+    if (uniqueMonths.length > 1) {
+      return uniqueMonths[uniqueMonths.length - 2];
+    }
+    return "2026-06";
+  });
 
-interface AIRoomComparison {
-  roomId: string;
-  roomName: string;
-  comparisonTag: string;
-  comparisonMetric: string;
-}
-
-interface AIAnalysisResult {
-  averages: AIAverages[];
-  trends: AITrend[];
-  latePaymentAnalysis: AILatePayment[];
-  roomComparison: AIRoomComparison[];
-  overallSummary: string;
-}
-
-interface GoogleProfile {
-  name: string;
-  email: string;
-  picture: string;
-}
-
-export default function AIAnalytics({ rooms, bills, meters, payments }: AIAnalyticsProps) {
-  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<"averages" | "trends" | "payments" | "comparison" | "overall">("averages");
-
-  const [customApiKey, setCustomApiKey] = useState<string>("");
-  const [showApiKey, setShowApiKey] = useState<boolean>(false);
-  const [showApiOption, setShowApiOption] = useState<boolean>(false);
-
-  const [googleUser, setGoogleUser] = useState<GoogleProfile | null>(null);
-  const [googleToken, setGoogleToken] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
-
-  // Load API Key and Google login on mount
+  // Sync state if uniqueMonths list changes or is loaded
   React.useEffect(() => {
-    try {
-      const savedKey = localStorage.getItem("sabaidee_dorm_custom_gemini_key") || "";
-      setCustomApiKey(savedKey);
-
-      const savedUser = localStorage.getItem("sabaidee_dorm_google_user");
-      const savedToken = localStorage.getItem("sabaidee_dorm_google_token");
-      if (savedUser && savedToken) {
-        setGoogleUser(JSON.parse(savedUser));
-        setGoogleToken(savedToken);
-      }
-    } catch (err) {
-      console.error("Error loading saved Gemini API Key or Google login:", err);
+    if (uniqueMonths.length > 0 && !uniqueMonths.includes(targetMonth)) {
+      setTargetMonth(uniqueMonths[uniqueMonths.length - 1]);
     }
-  }, []);
-
-  const [cachedData, setCachedData] = useState<{ inputsString: string; result: AIAnalysisResult } | null>(null);
-  const [hasDataChanged, setHasDataChanged] = useState<boolean>(false);
-
-  const currentInputsString = JSON.stringify({ rooms, bills, meters, payments, selectedRoomIds });
-
-  // Sync cache and analyze automatic retrieval
-  React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sabaidee_dorm_ai_analysis_cache");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.inputsString && parsed.result) {
-          setCachedData(parsed);
-          if (parsed.inputsString === currentInputsString) {
-            setAnalysisResult(parsed.result);
-            setHasDataChanged(false);
-          } else {
-            setHasDataChanged(true);
-            setAnalysisResult(null); // Clear active result since data changed
-          }
-        } else {
-          setHasDataChanged(false);
-        }
-      } else {
-        setHasDataChanged(false);
-      }
-    } catch (err) {
-      console.error("Error reading AI cache:", err);
+    if (uniqueMonths.length > 1 && !uniqueMonths.includes(compareMonth)) {
+      setCompareMonth(uniqueMonths[uniqueMonths.length - 2]);
     }
-  }, [rooms, bills, meters, payments, selectedRoomIds, currentInputsString]);
+  }, [uniqueMonths]);
 
-  // Handle room selection for comparison
-  const handleToggleRoom = (roomId: string) => {
-    setSelectedRoomIds((prev) =>
-      prev.includes(roomId)
-        ? prev.filter((id) => id !== roomId)
-        : [...prev, roomId]
-    );
-  };
+  // =========================================================================
+  // MATH & CALCULATIONS
+  // =========================================================================
 
-  // Handle Google Login popup flow
-  const handleGoogleLogin = async () => {
-    setIsLoggingIn(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/auth/url");
-      if (!response.ok) {
-        throw new Error("ล้มเหลวในการดึงลิงก์เชื่อมต่อ Google");
+  // 1. Overall monthly average (เฉลี่ยรายเดือนทั้งหมดของทั้งหอพัก)
+  const overallAverages = useMemo(() => {
+    if (bills.length === 0) {
+      return { avgWater: 0, avgElec: 0, totalMonthsCount: 0 };
+    }
+    
+    // Group units by month
+    const monthTotals: Record<string, { water: number; elec: number }> = {};
+    bills.forEach(b => {
+      if (!monthTotals[b.month]) {
+        monthTotals[b.month] = { water: 0, elec: 0 };
       }
-      const data = await response.json();
-      
-      const width = 500;
-      const height = 650;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      
-      const popup = window.open(
-        data.url,
-        "google-oauth-popup",
-        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
-      );
+      monthTotals[b.month].water += b.waterUnits || 0;
+      monthTotals[b.month].elec += b.elecUnits || 0;
+    });
 
-      if (!popup) {
-        throw new Error("ไม่สามารถเปิดหน้าต่างป๊อปอัปได้ กรุณาปิดการบล็อกป๊อปอัปของเบราว์เซอร์แล้วลองอีกครั้ง");
-      }
+    const months = Object.keys(monthTotals);
+    if (months.length === 0) return { avgWater: 0, avgElec: 0, totalMonthsCount: 0 };
 
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === "OAUTH_AUTH_SUCCESS") {
-          const { accessToken, profile } = event.data;
-          setGoogleUser(profile);
-          setGoogleToken(accessToken);
-          localStorage.setItem("sabaidee_dorm_google_user", JSON.stringify(profile));
-          localStorage.setItem("sabaidee_dorm_google_token", accessToken);
-          setIsLoggingIn(false);
-          window.removeEventListener("message", handleMessage);
-        } else if (event.data?.type === "OAUTH_AUTH_ERROR") {
-          setError(`การเชื่อมต่อบัญชีล้มเหลว: ${event.data.error}`);
-          setIsLoggingIn(false);
-          window.removeEventListener("message", handleMessage);
+    let sumWater = 0;
+    let sumElec = 0;
+    months.forEach(m => {
+      sumWater += monthTotals[m].water;
+      sumElec += monthTotals[m].elec;
+    });
+
+    return {
+      avgWater: Math.round((sumWater / months.length) * 10) / 10,
+      avgElec: Math.round((sumElec / months.length) * 10) / 10,
+      totalMonthsCount: months.length
+    };
+  }, [bills]);
+
+  // 2. Calendar Month Averages Across All Years (เดือนที่ใช้ใน ทุก ๆ ปี เฉลี่ยเท่าไหร่ เช่น มกราคม, กุมภาพันธ์)
+  const calendarMonthAverages = useMemo(() => {
+    // We group by the 2-digit month string "01", "02", etc.
+    const monthGroups: Record<string, { waterSum: number; elecSum: number; distinctYearMonths: Set<string> }> = {};
+    
+    // Initialize 12 months
+    for (let i = 1; i <= 12; i++) {
+      const key = i.toString().padStart(2, "0");
+      monthGroups[key] = { waterSum: 0, elecSum: 0, distinctYearMonths: new Set<string>() };
+    }
+
+    bills.forEach(b => {
+      if (b.month && b.month.includes("-")) {
+        const [year, monthPart] = b.month.split("-");
+        if (monthGroups[monthPart]) {
+          monthGroups[monthPart].waterSum += b.waterUnits || 0;
+          monthGroups[monthPart].elecSum += b.elecUnits || 0;
+          monthGroups[monthPart].distinctYearMonths.add(b.month);
         }
+      }
+    });
+
+    // Compute averages
+    return Object.entries(monthGroups).map(([monthCode, data]) => {
+      const occurrences = data.distinctYearMonths.size || 1;
+      return {
+        monthCode,
+        monthNameTh: getThaiMonthName(monthCode),
+        avgWater: Math.round((data.waterSum / occurrences) * 10) / 10,
+        avgElec: Math.round((data.elecSum / occurrences) * 10) / 10,
+        yearsRecorded: occurrences
       };
+    }).sort((a, b) => a.monthCode.localeCompare(b.monthCode));
+  }, [bills]);
 
-      window.addEventListener("message", handleMessage);
+  // Helper to translate code to Thai month name
+  function getThaiMonthName(code: string): string {
+    const names: Record<string, string> = {
+      "01": "มกราคม",
+      "02": "กุมภาพันธ์",
+      "03": "มีนาคม",
+      "04": "เมษายน",
+      "05": "พฤษภาคม",
+      "06": "มิถุนายน",
+      "07": "กรกฎาคม",
+      "08": "สิงหาคม",
+      "09": "กันยายน",
+      "10": "ตุลาคม",
+      "11": "พฤศจิกายน",
+      "12": "ธันวาคม"
+    };
+    return names[code] || `เดือน ${code}`;
+  }
 
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          setIsLoggingIn(false);
-          window.removeEventListener("message", handleMessage);
-        }
-      }, 1000);
+  // Helper to calculate active occupancy duration for current tenant in room
+  const getRoomDuration = (roomId: string) => {
+    const tenant = tenants?.find(t => t.roomId === roomId && t.status === "ใช้งาน");
+    if (!tenant || !tenant.startDate) return "ไม่มีข้อมูลผู้เช่า";
+    const start = new Date(tenant.startDate);
+    const end = new Date("2026-07-11"); // Current system local time July 11, 2026
+    if (isNaN(start.getTime())) return "ไม่ทราบระยะเวลา";
 
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "เกิดข้อผิดพลาดในการเริ่มต้นเชื่อมต่อ Google");
-      setIsLoggingIn(false);
+    // Calculate difference in months based on calendar months
+    const startYear = start.getFullYear();
+    const startMonth = start.getMonth() + 1; // 1-indexed (1 to 12)
+    const endYear = end.getFullYear();
+    const endMonth = end.getMonth() + 1; // 1-indexed (1 to 12)
+
+    const totalMonths = Math.max(1, (endYear - startYear) * 12 + (endMonth - startMonth));
+    const years = Math.floor(totalMonths / 12);
+    const remainingMonths = totalMonths % 12;
+
+    if (years > 0) {
+      if (remainingMonths > 0) {
+        return `เข้าพัก ${years} ปี ${remainingMonths} เดือน`;
+      }
+      return `เข้าพัก ${years} ปี`;
     }
+    return `เข้าพัก ${totalMonths} เดือน`;
   };
 
-  const handleGoogleLogout = () => {
-    setGoogleUser(null);
-    setGoogleToken(null);
-    localStorage.removeItem("sabaidee_dorm_google_user");
-    localStorage.removeItem("sabaidee_dorm_google_token");
-  };
+  // 3. Compare Selected Month vs. Previous Month (เปรียบเทียบข้อมูลการใช้ของแต่ละห้องและภาพรวม)
+  const comparisonResults = useMemo(() => {
+    // Filter bills for target and compare months
+    const targetBills = bills.filter(b => b.month === targetMonth);
+    const compareBills = bills.filter(b => b.month === compareMonth);
 
-  // Run AI analysis
-  const handleRunAnalysis = async () => {
-    setIsAnalyzing(true);
-    setError(null);
+    // Sum overall units
+    const targetWaterTotal = targetBills.reduce((sum, b) => sum + (b.waterUnits || 0), 0);
+    const targetElecTotal = targetBills.reduce((sum, b) => sum + (b.elecUnits || 0), 0);
 
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (googleToken) {
-        headers["Authorization"] = `Bearer ${googleToken}`;
-      } else if (customApiKey.trim()) {
-        headers["x-gemini-api-key"] = customApiKey.trim();
-      }
+    const compareWaterTotal = compareBills.reduce((sum, b) => sum + (b.waterUnits || 0), 0);
+    const compareElecTotal = compareBills.reduce((sum, b) => sum + (b.elecUnits || 0), 0);
 
-      const response = await fetch("/api/ai/analyze-trends", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          rooms,
-          bills,
-          meters,
-          payments,
-          selectedRoomIds,
-          previousAnalysis: cachedData?.result || null
-        }),
-      });
+    // Math deltas
+    const waterDelta = targetWaterTotal - compareWaterTotal;
+    const waterDeltaPct = compareWaterTotal > 0 ? (waterDelta / compareWaterTotal) * 100 : 0;
 
-      const contentType = response.headers.get("content-type");
-      let data: any = {};
-      if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
-        const text = await response.text();
-        throw new Error(text || `เซิร์ฟเวอร์ตอบกลับด้วยข้อผิดพลาดสถานะ ${response.status}`);
-      }
+    const elecDelta = targetElecTotal - compareElecTotal;
+    const elecDeltaPct = compareElecTotal > 0 ? (elecDelta / compareElecTotal) * 100 : 0;
 
-      if (!response.ok) {
-        throw new Error(data.message || "เกิดข้อผิดพลาดในการเรียกใช้ API วิเคราะห์ข้อมูลด้วย AI");
-      }
+    // Room-by-room details
+    const roomDetailsList = rooms.map(room => {
+      const targetBill = targetBills.find(b => b.roomId === room.id);
+      const compareBill = compareBills.find(b => b.roomId === room.id);
 
-      setAnalysisResult(data);
+      const targetWater = targetBill?.waterUnits || 0;
+      const compareWater = compareBill?.waterUnits || 0;
+      const waterDiff = targetWater - compareWater;
 
-      // Save to local storage cache
-      const cachePayload = {
-        inputsString: currentInputsString,
-        result: data
+      const targetElec = targetBill?.elecUnits || 0;
+      const compareElec = compareBill?.elecUnits || 0;
+      const elecDiff = targetElec - compareElec;
+
+      const activeTenant = tenants?.find(t => t.roomId === room.id && t.status === "ใช้งาน");
+      const tenantName = activeTenant ? activeTenant.name : (targetBill?.tenantName || compareBill?.tenantName || "ไม่มีผู้เช่า");
+
+      return {
+        roomId: room.id,
+        roomName: room.id, // Use id for display as room name
+        tenantName,
+        targetWater,
+        compareWater,
+        waterDiff,
+        targetElec,
+        compareElec,
+        elecDiff
       };
-      localStorage.setItem("sabaidee_dorm_ai_analysis_cache", JSON.stringify(cachePayload));
-      setCachedData(cachePayload);
-      setHasDataChanged(false);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง โปรดตรวจสอบอินเทอร์เน็ตหรือบัญชีการเชื่อมต่อของคุณ");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+    });
 
-  // Helper to render trend icons & colors
-  const renderTrendBadge = (trend: string) => {
-    const cleanTrend = trend.toLowerCase();
-    if (cleanTrend.includes("inc") || cleanTrend === "increasing" || cleanTrend.includes("เพิ่ม")) {
-      return (
-        <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold border border-red-200">
-          <TrendingUp className="w-3.5 h-3.5" /> เพิ่มขึ้น
-        </span>
-      );
-    } else if (cleanTrend.includes("dec") || cleanTrend === "decreasing" || cleanTrend.includes("ลด")) {
-      return (
-        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold border border-emerald-200">
-          <TrendingDown className="w-3.5 h-3.5" /> ลดลง
-        </span>
-      );
-    } else {
-      return (
-        <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-200">
-          <Activity className="w-3.5 h-3.5" /> คงที่ / ปานกลาง
-        </span>
-      );
-    }
-  };
+    return {
+      targetWaterTotal,
+      compareWaterTotal,
+      waterDelta,
+      waterDeltaPct: Math.round(waterDeltaPct * 10) / 10,
+      targetElecTotal,
+      compareElecTotal,
+      elecDelta,
+      elecDeltaPct: Math.round(elecDeltaPct * 10) / 10,
+      roomDetailsList
+    };
+  }, [rooms, bills, targetMonth, compareMonth, tenants]);
 
-  // Helper for risk badge styling
-  const renderRiskBadge = (risk: string) => {
-    const cleanRisk = risk.toLowerCase();
-    if (cleanRisk === "high" || cleanRisk.includes("สูง")) {
-      return (
-        <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-1 rounded-full text-xs font-extrabold border border-red-300">
-          <AlertTriangle className="w-3 h-3" /> ความเสี่ยงสูง
-        </span>
+  // 4. Per Room average across all available bills (เฉลี่ยรายห้องเพื่อนำเสนอ)
+  const roomAveragesList = useMemo(() => {
+    return rooms.map(room => {
+      const roomBills = bills.filter(b => b.roomId === room.id);
+      const billCount = roomBills.length;
+      
+      const totalWater = roomBills.reduce((sum, b) => sum + (b.waterUnits || 0), 0);
+      const totalElec = roomBills.reduce((sum, b) => sum + (b.elecUnits || 0), 0);
+
+      const activeTenant = tenants?.find(t => t.roomId === room.id && t.status === "ใช้งาน");
+      const tenantName = activeTenant ? activeTenant.name : (roomBills[roomBills.length - 1]?.tenantName || "ไม่มีผู้เช่า");
+
+      return {
+        roomId: room.id,
+        tenantName,
+        avgWater: billCount > 0 ? Math.round((totalWater / billCount) * 10) / 10 : 0,
+        avgElec: billCount > 0 ? Math.round((totalElec / billCount) * 10) / 10 : 0,
+        billCount
+      };
+    });
+  }, [rooms, bills, tenants]);
+
+  // 5. Per-room averages specifically for selectedCalendarMonth across all years
+  const roomCalendarMonthAverages = useMemo(() => {
+    return rooms.map(room => {
+      // Find all bills for this room matching the selected calendar month (e.g. month ends with "-06" for June)
+      const roomBills = bills.filter(
+        b => b.month && b.month.endsWith("-" + selectedCalendarMonth) && b.roomId === room.id
       );
-    } else if (cleanRisk === "medium" || cleanRisk.includes("กลาง")) {
+      const billCount = roomBills.length;
+
+      const totalWaterUnits = roomBills.reduce((sum, b) => sum + (b.waterUnits || 0), 0);
+      const totalWaterCost = roomBills.reduce((sum, b) => sum + (b.waterCost || 0), 0);
+      const totalElecUnits = roomBills.reduce((sum, b) => sum + (b.elecUnits || 0), 0);
+      const totalElecCost = roomBills.reduce((sum, b) => sum + (b.elecCost || 0), 0);
+
+      const activeTenant = tenants?.find(t => t.roomId === room.id && t.status === "ใช้งาน");
+      const tenantName = activeTenant ? activeTenant.name : (roomBills[roomBills.length - 1]?.tenantName || "ไม่มีผู้เช่าปัจจุบัน");
+
+      return {
+        roomId: room.id,
+        tenantName,
+        durationTh: getRoomDuration(room.id),
+        avgWaterUnits: billCount > 0 ? Math.round((totalWaterUnits / billCount) * 10) / 10 : 0,
+        avgWaterCost: billCount > 0 ? Math.round(totalWaterCost / billCount) : 0,
+        avgElecUnits: billCount > 0 ? Math.round((totalElecUnits / billCount) * 10) / 10 : 0,
+        avgElecCost: billCount > 0 ? Math.round(totalElecCost / billCount) : 0,
+        billCount
+      };
+    });
+  }, [rooms, bills, selectedCalendarMonth, tenants]);
+
+  // Search filter
+  const filteredRoomComparison = useMemo(() => {
+    return comparisonResults.roomDetailsList.filter(item => {
+      const query = searchTerm.toLowerCase();
       return (
-        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-xs font-extrabold border border-amber-300">
-          <Clock className="w-3 h-3" /> ความเสี่ยงปานกลาง
-        </span>
+        item.roomId.toLowerCase().includes(query) ||
+        (item.tenantName && item.tenantName.toLowerCase().includes(query))
       );
-    } else {
+    });
+  }, [comparisonResults.roomDetailsList, searchTerm]);
+
+  const filteredRoomAverages = useMemo(() => {
+    return roomAveragesList.filter(item => {
+      const query = searchTerm.toLowerCase();
       return (
-        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-xs font-extrabold border border-emerald-300">
-          <CheckCircle className="w-3 h-3" /> เสถียรดีมาก
-        </span>
+        item.roomId.toLowerCase().includes(query) ||
+        (item.tenantName && item.tenantName.toLowerCase().includes(query))
       );
-    }
-  };
+    });
+  }, [roomAveragesList, searchTerm]);
+
+  const filteredRoomCalendarMonthAverages = useMemo(() => {
+    return roomCalendarMonthAverages.filter(item => {
+      const query = searchTerm.toLowerCase();
+      return (
+        item.roomId.toLowerCase().includes(query) ||
+        (item.tenantName && item.tenantName.toLowerCase().includes(query))
+      );
+    });
+  }, [roomCalendarMonthAverages, searchTerm]);
 
   return (
-    <div id="ai-analytics-dashboard" className="space-y-6">
-      {/* Editorial AI Header Banner */}
-      <div className="bg-slate-900 rounded-2xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl border border-slate-800">
-        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-          <Cpu className="w-48 h-48 text-white" />
+    <div className="space-y-6">
+      
+      {/* Top Title Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-blue-700 to-indigo-800 rounded-3xl p-6 md:p-8 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <Activity className="w-48 h-48 -mr-12 -mt-12" />
         </div>
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-blue-500/30">
-            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-            Sabaidee Dorm AI Engine V2.5
+        <div className="space-y-2 relative z-10">
+          <div className="flex items-center space-x-2 bg-white/15 px-3 py-1 rounded-full text-xs font-bold w-fit tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>แนะนำการใช้งาน</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-            ระบบปัญญาประดิษฐ์วิเคราะห์พฤติกรรมและคาดการณ์
-          </h1>
-          <p className="mt-2 text-slate-300 text-sm md:text-base leading-relaxed">
-            ใช้อัลกอริทึมของ <span className="text-blue-300 font-bold">Gemini 3.5 Flash</span> ในการประเมินรอบบิลย้อนหลัง สรุปผลความคุ้มค่าการใช้พลังงาน ตรวจจับห้องพักที่มีประวัติชำระค่าเช่าล่าช้า และเปรียบเทียบหาแนวโน้มพฤติกรรมการอุปโภคเพื่อสนับสนุนการปรับราคาและการประหยัดค่าสาธารณูปโภคของหอพักอย่างแม่นยำ
+          <h2 className="text-xl md:text-2xl font-black tracking-tight leading-none">ระบบเปรียบเทียบการใช้งานน้ำไฟ (Local Analytics)</h2>
+          <p className="text-xs md:text-sm text-blue-100 font-semibold max-w-2xl">
+            ประมวลผลข้อมูลมิเตอร์และบิลค่าห้องจากฐานข้อมูลโดยตรง เพื่อวิเคราะห์เปรียบเทียบหาความแตกต่างการใช้สาธารณูปโภคได้อย่างแม่นยำ ไม่ต้องพึ่งพาอินเทอร์เน็ตหรือกุญแจ API ภายนอก
           </p>
+        </div>
+        <div className="shrink-0 flex items-center bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 relative z-10 text-right">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-blue-200 block">ช่วงวิเคราะห์หลัก</span>
+            <span className="text-sm font-black font-mono">{targetMonth} เทียบกับ {compareMonth}</span>
+          </div>
         </div>
       </div>
 
-      {/* Google Authentication for Gemini AI */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center bg-blue-100 text-blue-600 rounded-full w-5 h-5 text-xs font-bold font-mono">G</span>
-              <h3 className="text-sm font-bold text-slate-800">
-                เชื่อมต่อบัญชี Google เพื่อใช้งาน Gemini AI วิเคราะห์หอพัก
-              </h3>
+      {/* Top 4 Stats Highlights (เฉลี่ยรายเดือน / ความต่างจากเดือนที่แล้ว) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Stat 1: ใช้น้ำเฉลี่ยต่อเดือน */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-400">ค่าน้ำเฉลี่ยรวม / เดือน</span>
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <Droplet className="w-4 h-4" />
             </div>
-            <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-              สลับจากระบบ API Key แบบเดิมมาเป็นการเชื่อมต่อแบบไร้รหัสผ่านที่ปลอดภัยกว่า คีย์หรือบัญชีของคุณจะได้รับการป้องกันระดับองค์กรด้วยระบบ Google Accounts และสามารถเรียกใช้งาน AI ได้อย่างเต็มรูปแบบทันที
+          </div>
+          <div>
+            <p className="text-2xl font-black font-mono text-slate-800">
+              {overallAverages.avgWater.toLocaleString("th-TH")}
+            </p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1">
+              คำนวณจากประวัติการจดบันทึก {overallAverages.totalMonthsCount} เดือนย้อนหลัง
             </p>
           </div>
-
-          <div className="shrink-0 flex items-center">
-            {googleUser ? (
-              <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-3 pr-4 shadow-sm">
-                {googleUser.picture ? (
-                  <img src={googleUser.picture} alt={googleUser.name} className="w-10 h-10 rounded-full border border-slate-100" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
-                    {googleUser.name.charAt(0)}
-                  </div>
-                )}
-                <div className="text-left space-y-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-800">{googleUser.name}</span>
-                    <span className="inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-extrabold rounded-full">เชื่อมต่อแล้ว</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono">{googleUser.email}</div>
-                </div>
-                <button
-                  onClick={handleGoogleLogout}
-                  className="ml-2 text-xs text-red-600 hover:text-red-700 font-bold hover:underline bg-transparent border-none cursor-pointer p-1 transition-all"
-                >
-                  ตัดการเชื่อมต่อ
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-                className="inline-flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 hover:border-slate-400 font-extrabold text-xs px-4 py-3 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer duration-200 disabled:opacity-50"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
-                  <g transform="matrix(1, 0, 0, 1, 0, 0)">
-                    <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.58h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.48C21.68,11.78 21.56,11.4 21.35,11.1z" fill="#4285F4" />
-                    <path d="M12,20.8c2.38,0 4.38,-0.78 5.84,-2.14l-3.3,-2.58c-0.92,0.62 -2.1,0.98 -3.54,0.98c-2.72,0 -5.02,-1.84 -5.84,-4.3H1.73v2.66C3.18,18.28 7.3,20.8 12,20.8z" fill="#34A853" />
-                    <path d="M6.16,12.76c-0.2,-0.62 -0.32,-1.28 -0.32,-1.96s0.12,-1.34 0.32,-1.96V6.18H1.73C1.06,7.5 0.68,9 0.68,10.8s0.38,3.3 1.05,4.62L6.16,12.76z" fill="#FBBC05" />
-                    <path d="M12,5.56c1.3,0 2.46,0.44 3.38,1.32l2.54,-2.54C16.38,2.9 14.38,2 12,2C7.3,2 3.18,4.52 1.73,8.14l4.43,3.44C6.98,9.08 9.28,5.56 12,5.56z" fill="#EA4335" />
-                  </g>
-                </svg>
-                {isLoggingIn ? "กำลังเชื่อมต่อ..." : "เชื่อมต่อบัญชี Google ของคุณ"}
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* Custom API Key Collapsible Backup */}
-        <div className="pt-2 border-t border-slate-200/60">
-          <button
-            onClick={() => setShowApiOption(!showApiOption)}
-            className="text-[11px] text-slate-400 hover:text-slate-600 font-bold hover:underline flex items-center gap-1 bg-transparent border-none cursor-pointer"
-          >
-            {showApiOption ? "✕ ซ่อนตัวเลือก API Key สำรอง" : "⚙️ ใช้รหัสผ่าน API Key ส่วนตัว (กรณีบัญชี Google ขัดข้อง)"}
-          </button>
-
-          {showApiOption && (
-            <div className="mt-3 p-4 bg-slate-100 rounded-xl border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300">
-              <div className="space-y-1">
-                <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-blue-600" />
-                  <span>ข้อมูล Gemini API Key ส่วนตัวส่วนบุคคล</span>
-                </h4>
-                <p className="text-[10px] text-slate-500 max-w-xl">
-                  หากคุณพบคอขวดปริมาณการเรียกใช้งานด้วยบัญชี Google หรือใช้บัญชีภายนอกเพื่อประมวลผล สามารถระบุ API Key ส่วนตัวตรงนี้ได้ คีย์จะส่งผ่านเซสชันของเบราว์เซอร์นี้โดยตรง
-                </p>
-              </div>
-              <div className="flex items-center gap-2 w-full md:w-auto md:max-w-xs shrink-0">
-                <div className="relative flex-1 w-full">
-                  <input
-                    type={showApiKey ? "text" : "password"}
-                    placeholder="กรอก Gemini API Key (AIzaSy...)"
-                    value={customApiKey}
-                    onChange={(e) => {
-                      const val = e.target.value.trim();
-                      setCustomApiKey(val);
-                      localStorage.setItem("sabaidee_dorm_custom_gemini_key", val);
-                    }}
-                    className="w-full px-2.5 py-1.5 text-[11px] border border-slate-300 rounded-lg pr-8 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none"
-                  >
-                    {showApiKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  </button>
-                </div>
-                {customApiKey && (
-                  <button
-                    onClick={() => {
-                      setCustomApiKey("");
-                      localStorage.removeItem("sabaidee_dorm_custom_gemini_key");
-                    }}
-                    className="px-2 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg text-[10px] font-bold cursor-pointer shrink-0 transition-colors"
-                  >
-                    ลบออก
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Control Box: Room Multi-Selector & Run Button */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">
-          ขั้นตอนที่ 1: เลือกห้องพักที่ต้องการวิเคราะห์หรือเปรียบเทียบยอด (เลือกกี่ห้องก็ได้)
-        </h3>
-
-        {rooms.length === 0 ? (
-          <div className="text-slate-500 text-center py-4 text-sm">
-            ไม่มีห้องพักในระบบในขณะนี้ โปรดเพิ่มห้องพักก่อนทำการวิเคราะห์
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-6">
-            {rooms.map((room) => {
-              const isSelected = selectedRoomIds.includes(room.id);
-              return (
-                <button
-                  key={room.id}
-                  onClick={() => handleToggleRoom(room.id)}
-                  className={`px-3 py-2.5 rounded-lg text-sm font-bold transition-all border text-center ${
-                    isSelected
-                      ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/10"
-                      : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700"
-                  }`}
-                >
-                  ห้อง {room.name}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* AI Analysis Cache / Status Banner */}
-        {cachedData && (
-          <div className={`mb-5 p-4 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
-            !hasDataChanged 
-              ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
-              : "bg-amber-50 border-amber-100 text-amber-800"
-          }`}>
-            <Sparkles className={`w-4 h-4 shrink-0 mt-0.5 ${!hasDataChanged ? "text-emerald-600" : "text-amber-600"}`} />
-            <div>
-              {!hasDataChanged ? (
-                <>
-                  <p className="font-bold text-emerald-900">⚡ แสดงผลวิเคราะห์ล่าสุดทันที (ข้อมูลไม่มีการเปลี่ยนแปลง)</p>
-                  <p className="text-emerald-700 mt-0.5 font-semibold">ระบบได้ดึงผลลัพธ์การวิเคราะห์ที่บันทึกไว้ล่าสุดมาแสดงผลโดยอัตโนมัติเพื่อประหยัดการทำงาน</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold text-amber-900">⚠️ ตรวจพบการเปลี่ยนแปลงของข้อมูลหอพักล่าสุด</p>
-                  <p className="text-amber-700 mt-0.5 font-semibold">คุณสามารถกดเริ่มวิเคราะห์ใหม่ได้ทันที โดยระบบจะส่งผลวิเคราะห์เดิมไปเป็นคีย์อ้างอิง เพื่อให้ AI วิเคราะห์การอัปเดตและเปรียบเทียบแนวโน้มพฤติกรรมให้คุณด้วย</p>
-                  <button 
-                    onClick={() => {
-                      setAnalysisResult(cachedData.result);
-                      setHasDataChanged(false); // Display previous results temporarily on demand
-                    }}
-                    className="mt-2.5 px-2 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200 rounded text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    🔍 แสดงผลวิเคราะห์เดิมชั่วคราว (อ้างอิงข้อมูลชุดเดิม)
-                  </button>
-                </>
-              )}
+        {/* Stat 2: ใช้ไฟเฉลี่ยต่อเดือน */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-400">ค่าไฟเฉลี่ยรวม / เดือน</span>
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+              <Zap className="w-4 h-4" />
             </div>
           </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 pt-5">
-          <div className="text-xs text-slate-500 flex items-center gap-1.5">
-            <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
-            <span>คำแนะนำ: ข้อมูลทั้งหมดจะประมวลผลบนคลาวด์อย่างปลอดภัย คีย์ Gemini API ของคุณไม่ถูกส่งไปยังไคลเอนต์</span>
+          <div>
+            <p className="text-2xl font-black font-mono text-slate-800">
+              {overallAverages.avgElec.toLocaleString("th-TH")}
+            </p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1">
+              คำนวณจากประวัติการจดบันทึก {overallAverages.totalMonthsCount} เดือนย้อนหลัง
+            </p>
           </div>
-
-          <button
-            onClick={handleRunAnalysis}
-            disabled={isAnalyzing || rooms.length === 0}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold px-6 py-3 rounded-lg shadow-md transition-all cursor-pointer text-sm"
-          >
-            {isAnalyzing ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>ระบบ AI กำลังประมวลผลข้อมูล...</span>
-              </>
-            ) : (
-              <>
-                <Cpu className="w-4.5 h-4.5" />
-                <span>ประมวลผลวิเคราะห์ด้วย AI</span>
-              </>
-            )}
-          </button>
         </div>
+
+        {/* Stat 3: ผลต่างการใช้น้ำจากรอบเดือนที่แล้ว */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-400">ผลต่างค่าน้ำประปา</span>
+            <div className={`p-2 rounded-xl ${comparisonResults.waterDelta >= 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
+              {comparisonResults.waterDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline space-x-2">
+              <p className="text-2xl font-black font-mono text-slate-800">
+                {comparisonResults.waterDelta >= 0 ? "+" : ""}{comparisonResults.waterDelta.toLocaleString("th-TH")}
+              </p>
+              <span className="text-xs font-black">หน่วย</span>
+            </div>
+            <p className={`text-[10px] font-black mt-1 ${comparisonResults.waterDelta >= 0 ? "text-rose-500" : "text-emerald-500"}`}>
+              {comparisonResults.waterDelta >= 0 ? "เพิ่มขึ้น" : "ลดลง"} {Math.abs(comparisonResults.waterDeltaPct)}% จากรอบเดือน {compareMonth}
+            </p>
+          </div>
+        </div>
+
+        {/* Stat 4: ผลต่างการใช้ไฟจากรอบเดือนที่แล้ว */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-400">ผลต่างกระแสไฟฟ้า</span>
+            <div className={`p-2 rounded-xl ${comparisonResults.elecDelta >= 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
+              {comparisonResults.elecDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline space-x-2">
+              <p className="text-2xl font-black font-mono text-slate-800">
+                {comparisonResults.elecDelta >= 0 ? "+" : ""}{comparisonResults.elecDelta.toLocaleString("th-TH")}
+              </p>
+              <span className="text-xs font-black">หน่วย</span>
+            </div>
+            <p className={`text-[10px] font-black mt-1 ${comparisonResults.elecDelta >= 0 ? "text-rose-500" : "text-emerald-500"}`}>
+              {comparisonResults.elecDelta >= 0 ? "เพิ่มขึ้น" : "ลดลง"} {Math.abs(comparisonResults.elecDeltaPct)}% จากรอบเดือน {compareMonth}
+            </p>
+          </div>
+        </div>
+
       </div>
 
-      {/* Error Output */}
-      <AnimatePresence>
-        {error && (
+      {/* Navigation Tabs Bar */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-1.5 flex gap-1 shadow-sm max-w-md">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAnalysisView("comparison");
+            setSearchTerm("");
+          }}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+            activeAnalysisView === "comparison"
+              ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/10"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5" />
+          <span>เปรียบเทียบเทียบรายงวด</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAnalysisView("seasonal");
+            setSearchTerm("");
+          }}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+            activeAnalysisView === "seasonal"
+              ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/10"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>เฉลี่ยรายเดือนทุกปี</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAnalysisView("rooms");
+            setSearchTerm("");
+          }}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+            activeAnalysisView === "rooms"
+              ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/10"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          }`}
+        >
+          <DoorClosed className="w-3.5 h-3.5" />
+          <span>วิเคราะห์รายห้อง</span>
+        </button>
+      </div>
+
+      {/* Views Content Panels */}
+      <AnimatePresence mode="wait">
+        
+        {/* VIEW 1: COMPARISON REPORT */}
+        {activeAnalysisView === "comparison" && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            key="comparison-view"
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 flex items-start gap-3"
-          >
-            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-bold text-sm">ไม่สามารถวิเคราะห์ข้อมูลได้</h4>
-              <p className="text-xs text-red-700 mt-1 leading-relaxed">{error}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Analysis Display Portal */}
-      {!analysisResult && !isAnalyzing && (
-        <div className="bg-slate-50 rounded-xl p-8 text-center border-2 border-dashed border-slate-200">
-          <Sparkles className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-          <h3 className="font-bold text-slate-700">พร้อมดำเนินการวิเคราะห์ข้อมูล</h3>
-          <p className="text-slate-500 text-xs mt-1 max-w-md mx-auto leading-relaxed">
-            เลือกรายชื่อห้องที่ต้องการเปรียบเทียบในแผงควบคุมด้านบน จากนั้นคลิกปุ่ม "ประมวลผลวิเคราะห์ด้วย AI" เพื่อจำลองข้อมูลการคำนวณและประเมินเชิงสถิติได้ทันที
-          </p>
-        </div>
-      )}
-
-      {/* Loading placeholder skeleton */}
-      {isAnalyzing && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="h-4 bg-slate-200 rounded w-1/4 animate-pulse"></div>
-          <div className="space-y-2">
-            <div className="h-8 bg-slate-100 rounded animate-pulse"></div>
-            <div className="h-8 bg-slate-100 rounded w-5/6 animate-pulse"></div>
-            <div className="h-8 bg-slate-100 rounded w-4/5 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-            <div className="h-32 bg-slate-50 rounded-lg animate-pulse"></div>
-            <div className="h-32 bg-slate-50 rounded-lg animate-pulse"></div>
-            <div className="h-32 bg-slate-50 rounded-lg animate-pulse"></div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Analysis Result Board */}
-      <AnimatePresence>
-        {analysisResult && !isAnalyzing && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.15 }}
             className="space-y-6"
           >
-            {/* Visual Tabs Navigation */}
-            <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar gap-2">
-              <button
-                onClick={() => setActiveSection("averages")}
-                className={`py-3 px-4 font-bold text-sm whitespace-nowrap transition-all border-b-2 -mb-px flex items-center gap-2 ${
-                  activeSection === "averages"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Gauge className="w-4 h-4" />
-                <span>ค่าเฉลี่ยใช้น้ำ/ไฟฟ้า</span>
-              </button>
-              <button
-                onClick={() => setActiveSection("trends")}
-                className={`py-3 px-4 font-bold text-sm whitespace-nowrap transition-all border-b-2 -mb-px flex items-center gap-2 ${
-                  activeSection === "trends"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Activity className="w-4 h-4" />
-                <span>คาดการณ์แนวโน้มพลังงาน</span>
-              </button>
-              <button
-                onClick={() => setActiveSection("payments")}
-                className={`py-3 px-4 font-bold text-sm whitespace-nowrap transition-all border-b-2 -mb-px flex items-center gap-2 ${
-                  activeSection === "payments"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                <span>วินัยชำระเงินและเครดิต</span>
-              </button>
-              <button
-                onClick={() => setActiveSection("comparison")}
-                className={`py-3 px-4 font-bold text-sm whitespace-nowrap transition-all border-b-2 -mb-px flex items-center gap-2 ${
-                  activeSection === "comparison"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-                <span>เปรียบเทียบยอดเฉลี่ยรายห้อง ({selectedRoomIds.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveSection("overall")}
-                className={`py-3 px-4 font-bold text-sm whitespace-nowrap transition-all border-b-2 -mb-px flex items-center gap-2 ${
-                  activeSection === "overall"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>สรุปวิเคราะห์เชิงกลยุทธ์</span>
-              </button>
+            {/* Months custom period selectors */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center space-x-2">
+                  <SlidersHorizontal className="w-4 h-4 text-[#2563eb]" />
+                  <h3 className="text-xs font-extrabold text-slate-800">กำหนดช่วงเวลาเปรียบเทียบ</h3>
+                </div>
+                <p className="text-[10px] text-slate-400 font-bold">กรุณาเลือกงวดเดือนที่ต้องการนำมาจับคู่เปรียบเทียบในรายละเอียด</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold text-slate-400 block uppercase">งวดเดือนตรวจสอบหลัก (ล่าสุด)</label>
+                  <select
+                    value={targetMonth}
+                    onChange={(e) => setTargetMonth(e.target.value)}
+                    className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl px-3 py-2.5 text-xs font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {uniqueMonths.map(m => (
+                      <option key={`target-${m}`} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold text-slate-400 block uppercase">งวดเดือนเปรียบเทียบ (ก่อนหน้า)</label>
+                  <select
+                    value={compareMonth}
+                    onChange={(e) => setCompareMonth(e.target.value)}
+                    className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl px-3 py-2.5 text-xs font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {uniqueMonths.map(m => (
+                      <option key={`compare-${m}`} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {/* Content Switcher */}
-            <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm min-h-[300px]">
-              
-              {/* SECTION 1: AVERAGES */}
-              {activeSection === "averages" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-extrabold text-slate-900 text-base">สถิติค่าเฉลี่ยอุปโภคน้ำและไฟฟ้าต่อรอบเดือน</h3>
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-bold text-slate-500">วิเคราะห์ตามประวัติบิลจริง</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {analysisResult.averages.map((avg) => (
-                      <div key={avg.roomId} className="border border-slate-100 rounded-xl p-4 hover:border-slate-300 transition-all bg-slate-50/50">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-extrabold text-slate-800">ห้องพัก {avg.roomName}</span>
-                          <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-mono">ID: {avg.roomId}</span>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {/* Water Avg */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-slate-600">
-                              <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-blue-500" /> การใช้น้ำประปาเฉลี่ย</span>
-                              <span className="font-bold text-slate-800">{avg.avgWaterUnits.toFixed(1)} หน่วย/เดือน</span>
-                            </div>
-                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                              <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, avg.avgWaterUnits * 5)}%` }}></div>
-                            </div>
-                            <div className="text-[10px] text-right text-slate-400 font-bold">คิดเป็นค่าใช้จ่ายเฉลี่ย {avg.avgWaterCost.toLocaleString()} บาท</div>
-                          </div>
-
-                          {/* Elec Avg */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-slate-600">
-                              <span className="flex items-center gap-1"><Zap className="w-3.5 h-3.5 text-amber-500" /> การใช้กระแสไฟฟ้าเฉลี่ย</span>
-                              <span className="font-bold text-slate-800">{avg.avgElecUnits.toFixed(1)} หน่วย/เดือน</span>
-                            </div>
-                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                              <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, avg.avgElecUnits * 0.5)}%` }}></div>
-                            </div>
-                            <div className="text-[10px] text-right text-slate-400 font-bold">คิดเป็นค่าใช้จ่ายเฉลี่ย {avg.avgElecCost.toLocaleString()} บาท</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {/* Room details breakdown table card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">รายละเอียดผลต่างแยกรายห้องพัก</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    ตารางสรุปผลการเปรียบเทียบความแตกต่าง (ต่างกันเท่าไหร่) ประจำงวดห้องพักรายบุคคล
+                  </p>
                 </div>
-              )}
 
-              {/* SECTION 2: TRENDS & PREDICTIONS */}
-              {activeSection === "trends" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-extrabold text-slate-900 text-base">การคาดการณ์พฤติกรรมใช้พลังงานและแนวโน้มล่วงหน้า</h3>
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-bold text-slate-500">คาดการณ์สำหรับงวดถัดไป</span>
-                  </div>
-
-                  <div className="space-y-4">
-                    {analysisResult.trends.map((trend) => (
-                      <div key={trend.roomId} className="border border-slate-100 hover:border-slate-200 rounded-xl p-4 bg-[#fbfcfd]">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-3">
-                          <span className="text-sm font-extrabold text-slate-800">ห้องพัก {trend.roomName}</span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs text-slate-500">มิเตอร์น้ำ: {renderTrendBadge(trend.waterTrend)}</span>
-                            <span className="text-xs text-slate-500">มิเตอร์ไฟ: {renderTrendBadge(trend.elecTrend)}</span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                          <div className="bg-blue-50/40 p-3 rounded-lg border border-blue-50">
-                            <div className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">คาดการณ์ใช้น้ำงวดหน้า</div>
-                            <div className="text-lg font-bold text-slate-800 mt-1">{trend.predictedWaterNextMonth.toFixed(1)} หน่วย</div>
-                          </div>
-                          <div className="bg-amber-50/40 p-3 rounded-lg border border-amber-50">
-                            <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">คาดการณ์ใช้ไฟฟ้างวดหน้า</div>
-                            <div className="text-lg font-bold text-slate-800 mt-1">{trend.predictedElecNextMonth.toFixed(1)} หน่วย</div>
-                          </div>
-                          <div className="md:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center">
-                            <p className="text-xs text-slate-600 leading-relaxed italic">
-                              "{trend.trendNarrative}"
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {/* Search box */}
+                <div className="relative w-full sm:w-64">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <Search className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาตามรหัสห้อง หรือ ชื่อผู้เช่า..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 text-xs font-bold rounded-xl pl-9 pr-3.5 py-2 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-              )}
+              </div>
 
-              {/* SECTION 3: LATE PAYMENTS */}
-              {activeSection === "payments" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-extrabold text-slate-900 text-base">ระบบประเมินวินัยทางการเงินและความเสี่ยงค้างจ่าย</h3>
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-bold text-slate-500">พิจารณาจากการชำระ FIFO</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {analysisResult.latePaymentAnalysis.map((payment) => (
-                      <div key={payment.roomId} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-extrabold text-slate-800">ห้องพัก {payment.roomName}</span>
-                            {renderRiskBadge(payment.riskLevel)}
-                          </div>
-                          <p className="text-xs font-bold text-blue-600 mt-1">
-                            สรุปพฤติกรรม: {payment.paymentStatusSummary}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                            {payment.riskDetails}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {filteredRoomComparison.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 space-y-2">
+                  <Info className="w-8 h-8 mx-auto text-slate-300 animate-bounce" />
+                  <p className="text-xs font-bold">ไม่พบข้อมูลบิลที่มีคุณสมบัติตามที่ค้นหาในช่วงเดือนนี้</p>
                 </div>
-              )}
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                        <th className="py-3 px-5">เลขห้อง / ผู้เช่า</th>
+                        <th className="py-3 px-5 text-center">ใช้น้ำ {compareMonth} (หน่วย)</th>
+                        <th className="py-3 px-5 text-center">ใช้น้ำ {targetMonth} (หน่วย)</th>
+                        <th className="py-3 px-5 text-center">ต่างกันเท่าไหร่ (น้ำ)</th>
+                        <th className="py-3 px-5 text-center">ใช้ไฟ {compareMonth} (หน่วย)</th>
+                        <th className="py-3 px-5 text-center">ใช้ไฟ {targetMonth} (หน่วย)</th>
+                        <th className="py-3 px-5 text-center">ต่างกันเท่าไหร่ (ไฟ)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredRoomComparison.map((item) => {
+                        const waterUp = item.waterDiff >= 0;
+                        const elecUp = item.elecDiff >= 0;
 
-              {/* SECTION 4: SELECTED ROOM COMPARISON */}
-              {activeSection === "comparison" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-extrabold text-slate-900 text-base">เปรียบเทียบยอดรวมและข้อมูลเชิงลึกระหว่างห้องพัก</h3>
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-bold text-slate-500">ผลการจับคู่เปรียบเทียบเฉพาะกลุ่ม</span>
-                  </div>
-
-                  {selectedRoomIds.length < 2 ? (
-                    <div className="text-center py-10">
-                      <Layers className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm text-slate-600 font-bold">กรุณาเลือกตั้งแต่ 2 ห้องขึ้นไปในขั้นตอนแรก</p>
-                      <p className="text-slate-400 text-xs mt-1">เพื่อเปิดการวิเคราะห์ข้อมูลความคุ้มค่าพลังงานและแนวโน้มเปรียบเทียบแบบรายคู่</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {analysisResult.roomComparison.map((comp) => (
-                          <div key={comp.roomId} className="border border-blue-100 rounded-xl p-4 bg-blue-50/20">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-extrabold text-slate-800">ห้องพัก {comp.roomName}</span>
-                              <span className="bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded">
-                                {comp.comparisonTag}
+                        return (
+                          <tr key={`comp-${item.roomId}`} className="hover:bg-slate-50/50 transition-all font-bold">
+                            <td className="py-4 px-5">
+                              <div className="flex items-center space-x-2">
+                                <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-extrabold font-mono shrink-0">
+                                  {item.roomId}
+                                </span>
+                                <span className="text-slate-600 truncate max-w-[120px]" title={item.tenantName}>
+                                  {item.tenantName}
+                                </span>
+                              </div>
+                            </td>
+                            
+                            {/* Water comparative cells */}
+                            <td className="py-4 px-5 text-center font-mono text-slate-500">
+                              {item.compareWater}
+                            </td>
+                            <td className="py-4 px-5 text-center font-mono text-slate-800">
+                              {item.targetWater}
+                            </td>
+                            <td className="py-4 px-5 text-center">
+                              <span className={`inline-flex items-center space-x-1 font-mono px-2 py-0.5 rounded text-[10px] ${
+                                item.waterDiff === 0 ? "bg-slate-100 text-slate-600" :
+                                waterUp ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                              }`}>
+                                {item.waterDiff === 0 ? "" : waterUp ? "+" : ""}
+                                <span>{item.waterDiff} หน่วย</span>
                               </span>
-                            </div>
-                            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                              {comp.comparisonMetric}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                            </td>
+
+                            {/* Electricity comparative cells */}
+                            <td className="py-4 px-5 text-center font-mono text-slate-500">
+                              {item.compareElec}
+                            </td>
+                            <td className="py-4 px-5 text-center font-mono text-slate-800">
+                              {item.targetElec}
+                            </td>
+                            <td className="py-4 px-5 text-center">
+                              <span className={`inline-flex items-center space-x-1 font-mono px-2 py-0.5 rounded text-[10px] ${
+                                item.elecDiff === 0 ? "bg-slate-100 text-slate-600" :
+                                elecUp ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                              }`}>
+                                {item.elecDiff === 0 ? "" : elecUp ? "+" : ""}
+                                <span>{item.elecDiff} หน่วย</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
-
-              {/* SECTION 5: STRATEGIC OVERALL SUMMARY */}
-              {activeSection === "overall" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-extrabold text-slate-900 text-base">สรุปทิศทางและข้อเสนอแนะเชิงกลยุทธ์จาก AI</h3>
-                    <span className="text-[10px] bg-blue-50 px-2 py-0.5 rounded font-bold text-blue-600">คำสั่งนโยบายบริหาร</span>
-                  </div>
-
-                  <div className="bg-slate-900 text-slate-200 rounded-xl p-6 border border-slate-800">
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap font-sans font-medium text-slate-100">
-                      {analysisResult.overallSummary}
-                    </p>
-                  </div>
-                </div>
-              )}
-
             </div>
           </motion.div>
         )}
+
+        {/* VIEW 2: SEASONAL MONTH-BY-MONTH CALENDAR AVERAGE (เฉลี่ยรายเดือนในทุกๆ ปี) */}
+        {activeAnalysisView === "seasonal" && (
+          <motion.div
+            key="seasonal-view"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6"
+          >
+            {/* Visual calendar average layout explanations */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-800">อัตราเฉลี่ยรายเดือนสะสมตามปฏิทินในทุกรอบปี</h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                  คำนวณและเฉลี่ยรายเดือนสะสม (ม.ค. - ธ.ค.) เพื่อช่วยให้มองเห็นสถิติปริมาณความต้องการใช้น้ำและไฟฟ้าเฉลี่ยสูงสุดของแต่ละช่วงฤดูกาลในรอบปี (คลิกเลือกแต่ละเดือนเพื่อดูแจงรายละเอียดรายห้องพักด้านล่าง)
+                </p>
+              </div>
+
+              {/* Compact 12-month grid showing both water and electricity side-by-side */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                {calendarMonthAverages.map(item => {
+                  const isSelected = selectedCalendarMonth === item.monthCode && showDetailedRooms;
+                  return (
+                    <div 
+                      key={`season-${item.monthCode}`} 
+                      onClick={() => {
+                        if (item.yearsRecorded === 0) {
+                          // กดเดือนที่ไม่มีข้อมูล ไม่มีการเปลี่ยนแปลง
+                          return;
+                        }
+                        if (selectedCalendarMonth === item.monthCode) {
+                          // เมื่อกดซ้ำให้ซ้อน
+                          setShowDetailedRooms(prev => !prev);
+                        } else {
+                          // เมื่อกดเดือนอื่น เปลี่ยน ข้อมูล
+                          setSelectedCalendarMonth(item.monthCode);
+                          setShowDetailedRooms(true);
+                        }
+                      }}
+                      className={`cursor-pointer border p-3 rounded-xl transition-all duration-150 flex flex-col justify-between ${
+                        isSelected 
+                          ? "bg-blue-50/70 border-blue-500 shadow-sm ring-1 ring-blue-500/20" 
+                          : "bg-slate-50/50 hover:bg-slate-50 border-slate-100/70 hover:border-slate-200"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800">
+                            {item.monthNameTh}
+                          </span>
+                          {isSelected && (
+                            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping" />
+                          )}
+                        </div>
+                        <span className="text-[8px] text-slate-400 font-bold block mb-1.5">
+                          ประวัติสะสม {item.yearsRecorded} ปี
+                        </span>
+                      </div>
+                      
+                      {/* Compact stacked water & electricity values */}
+                      <div className="space-y-1 mt-1.5 border-t border-slate-100/80 pt-2">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400 font-semibold flex items-center gap-1">
+                            <Droplet className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <span>น้ำเฉลี่ย</span>
+                          </span>
+                          <span className="font-extrabold text-blue-600 font-mono">
+                            {item.avgWater.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400 font-semibold flex items-center gap-1">
+                            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>ไฟเฉลี่ย</span>
+                          </span>
+                          <span className="font-extrabold text-amber-600 font-mono">
+                            {item.avgElec.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* DETAILED PER-ROOM BREAKDOWN FOR SELECTED CALENDAR MONTH */}
+            {showDetailedRooms && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden space-y-4 animate-in fade-in duration-200">
+                <div className="p-5 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <h3 className="text-sm font-black text-slate-800">
+                        แจงรายละเอียดค่าเฉลี่ยแยกรายห้องพัก ประจำเดือน {getThaiMonthName(selectedCalendarMonth)}
+                      </h3>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-semibold">
+                      คำนวณจากสถิติประวัติทุกปีเฉพาะเดือน{getThaiMonthName(selectedCalendarMonth)} และประมวลผลเป็นปริมาณเฉลี่ยและจำนวนเงินบาทจำลอง
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Select month dropdown */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase whitespace-nowrap">เลือกเดือน:</span>
+                      <select
+                        value={selectedCalendarMonth}
+                        onChange={(e) => {
+                          const newMonth = e.target.value;
+                          const monthItem = calendarMonthAverages.find(m => m.monthCode === newMonth);
+                          if (monthItem && monthItem.yearsRecorded > 0) {
+                            setSelectedCalendarMonth(newMonth);
+                            setShowDetailedRooms(true);
+                          }
+                        }}
+                        className="bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const code = (i + 1).toString().padStart(2, "0");
+                          return <option key={`sel-month-${code}`} value={code}>{getThaiMonthName(code)}</option>;
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Room list search box */}
+                    <div className="relative w-full sm:w-60">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                        <Search className="w-3 h-3" />
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="ค้นหารหัสห้อง / ผู้เช่า..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-100 text-xs font-bold rounded-xl pl-8 pr-3 py-1.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {filteredRoomCalendarMonthAverages.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 space-y-2">
+                    <Info className="w-8 h-8 mx-auto text-slate-300" />
+                    <p className="text-xs font-bold">ไม่พบข้อมูลห้องพักหรือสถิติตามการค้นหานี้</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5 pt-0">
+                    {filteredRoomCalendarMonthAverages.map(item => {
+                      return (
+                        <div 
+                          key={`avg-cal-room-${item.roomId}`} 
+                          className="bg-slate-50/40 rounded-2xl border border-slate-100 p-4 space-y-3 hover:shadow-sm hover:border-slate-200 transition-all duration-150"
+                        >
+                          {/* Room Title & stay duration */}
+                          <div className="flex items-center justify-between border-b border-slate-100/70 pb-2">
+                            <span className="text-sm font-black text-slate-800">
+                              ห้อง {item.roomId}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-bold">
+                              ({item.durationTh})
+                            </span>
+                          </div>
+
+                          {/* Tenant Name */}
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 font-bold">
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate" title={item.tenantName}>ผู้เช่า: {item.tenantName}</span>
+                          </div>
+
+                          {/* Averages and Costs */}
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-start gap-1.5 text-xs text-slate-700 font-medium">
+                              <span className="text-blue-500 font-black shrink-0 mt-0.5">•</span>
+                              <span>
+                                ค่าน้ำ เดือน {parseInt(selectedCalendarMonth)} เฉลี่ย <span className="font-extrabold text-blue-600 font-mono">{item.avgWaterUnits}</span> หน่วย คิดเป็น <span className="font-extrabold text-blue-700 font-mono">{item.avgWaterCost}</span> บาท
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-1.5 text-xs text-slate-700 font-medium">
+                              <span className="text-amber-500 font-black shrink-0 mt-0.5">•</span>
+                              <span>
+                                ค่าไฟ เดือน {parseInt(selectedCalendarMonth)} เฉลี่ย <span className="font-extrabold text-amber-600 font-mono">{item.avgElecUnits}</span> หน่วย คิดเป็น <span className="font-extrabold text-amber-700 font-mono">{item.avgElecCost}</span> บาท
+                              </span>
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* VIEW 3: PER-ROOM STATS AND AVERAGES */}
+        {activeAnalysisView === "rooms" && (
+          <motion.div
+            key="rooms-view"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6"
+          >
+            {/* Rooms lists card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">วิเคราะห์อัตราการใช้งานเฉลี่ยรายห้องพัก</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    ประมวลผลหาค่าน้ำและไฟฟ้าเฉลี่ยต่อรอบบิลของแต่ละห้องพักรายบุคคลจากอดีตจนถึงปัจจุบัน
+                  </p>
+                </div>
+
+                {/* Search box */}
+                <div className="relative w-full sm:w-64">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <Search className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาตามรหัสห้อง หรือ ชื่อผู้เช่า..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 text-xs font-bold rounded-xl pl-9 pr-3.5 py-2 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {filteredRoomAverages.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 space-y-2">
+                  <Info className="w-8 h-8 mx-auto text-slate-300 animate-bounce" />
+                  <p className="text-xs font-bold">ไม่พบข้อมูลห้องพักหรือสถิติตามการค้นหานี้</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+                  {filteredRoomAverages.map(item => (
+                    <div key={`avg-room-${item.roomId}`} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4 space-y-3.5 hover:shadow-sm hover:border-slate-200 transition-all">
+                      <div className="flex items-center justify-between">
+                        <span className="bg-[#2563eb] text-white px-3 py-1 rounded-xl text-xs font-black font-mono">
+                          ห้อง {item.roomId}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">บิลสะสม {item.billCount} ฉบับ</span>
+                      </div>
+                      
+                      <div className="border-b border-slate-100 pb-2.5">
+                        <span className="text-[9px] font-extrabold text-slate-400 block uppercase">ผู้เช่าปัจจุบัน/ล่าสุด</span>
+                        <span className="text-xs font-black text-slate-700 truncate block max-w-full" title={item.tenantName}>
+                          {item.tenantName}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white rounded-lg p-2.5 border border-slate-50 text-center">
+                          <span className="text-[9px] font-bold text-blue-500 flex items-center justify-center gap-0.5 mb-1">
+                            <Droplet className="w-3 h-3" />
+                            <span>น้ำเฉลี่ย</span>
+                          </span>
+                          <span className="text-sm font-black font-mono text-slate-800">
+                            {item.avgWater.toLocaleString("th-TH")}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-bold block mt-0.5">หน่วย / เดือน</span>
+                        </div>
+
+                        <div className="bg-white rounded-lg p-2.5 border border-slate-50 text-center">
+                          <span className="text-[9px] font-bold text-amber-500 flex items-center justify-center gap-0.5 mb-1">
+                            <Zap className="w-3 h-3" />
+                            <span>ไฟเฉลี่ย</span>
+                          </span>
+                          <span className="text-sm font-black font-mono text-slate-800">
+                            {item.avgElec.toLocaleString("th-TH")}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-bold block mt-0.5">หน่วย / เดือน</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+        
       </AnimatePresence>
+
     </div>
   );
 }

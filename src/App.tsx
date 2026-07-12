@@ -21,7 +21,9 @@ import {
   Info,
   Layers,
   Database,
-  Sparkles
+  Cloud,
+  Sparkles,
+  Activity
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -129,6 +131,27 @@ export default function App() {
   const [ownerInfo, setOwnerInfo] = useState<OwnerInfo>({ name: "", phone: "" });
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [addedItemsList, setAddedItemsList] = useState<AddedItem[]>([]);
+
+  // Real-time synchronization state listener
+  const [realtimeSyncStatus, setRealtimeSyncStatus] = useState<{
+    status: "idle" | "syncing" | "success" | "error";
+    message?: string;
+    time?: string;
+  }>({ status: "idle" });
+
+  useEffect(() => {
+    const handleStatus = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setRealtimeSyncStatus(detail);
+      if (detail.status === "success" && detail.time) {
+        setLastSyncTimeState(detail.time);
+      }
+    };
+    window.addEventListener("dorm_realtime_sync_status", handleStatus);
+    return () => {
+      window.removeEventListener("dorm_realtime_sync_status", handleStatus);
+    };
+  }, []);
 
   // Counter to notify real-time sheets database drawer of updates
   const [refreshSheetsTrigger, setRefreshSheetsTrigger] = useState<number>(0);
@@ -605,7 +628,7 @@ export default function App() {
     { id: "tenants", label: "สัญญาผู้เช่าอาศัย", icon: Users },
     { id: "meters", label: "จดจดมิเตอร์กลุ่ม", icon: Gauge },
     { id: "bills", label: "บิลสรุปประจำงวด", icon: FileSpreadsheet },
-    { id: "ai", label: "วิเคราะห์อัจฉริยะ AI", icon: Sparkles },
+    { id: "ai", label: "เปรียบเทียบการใช้น้ำไฟ", icon: Activity },
     { id: "banks", label: "บัญชีรับโอนฝาก", icon: DollarSign },
     { id: "payments", label: "ประวัติทำรายการ", icon: History },
     { id: "admin", label: "ตั้งค่าแอดมิน", icon: Settings }
@@ -624,7 +647,12 @@ export default function App() {
             <h1 className="text-sm font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
             <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
               <span>Dorm Ops Portal</span>
-              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
+              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.2</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse" :
+                realtimeSyncStatus.status === "success" ? "bg-emerald-400" :
+                realtimeSyncStatus.status === "error" ? "bg-rose-400" : "bg-emerald-400"
+              }`} title="Real-time sync" />
             </p>
           </div>
         </div>
@@ -675,7 +703,7 @@ export default function App() {
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
                     <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Dorm Ops Portal</span>
-                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.4</span>
                     </p>
                   </div>
                 </div>
@@ -760,7 +788,7 @@ export default function App() {
         </button>
 
         {/* Brand Header */}
-        <div className={`p-2 flex items-center ${isSidebarCollapsed ? "justify-center" : "gap-3"} border-b border-white/10 pb-5 mb-5 shrink-0`}>
+        <div className={`p-2 flex items-center ${isSidebarCollapsed ? "justify-center" : "gap-3"} border-b border-white/10 pb-5 mb-4 shrink-0`}>
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-md">
             <Building className="w-5 h-5 text-[#2563eb]" />
           </div>
@@ -769,11 +797,44 @@ export default function App() {
               <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
               <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Dorm Ops Portal</span>
-                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.1</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.4</span>
               </p>
             </div>
           )}
         </div>
+
+        {/* Real-time Google Sheets Sync Badge */}
+        {isSidebarCollapsed ? (
+          <div className="flex justify-center mb-4">
+            <div className={`p-1.5 rounded-full ${
+              realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse text-slate-900" :
+              realtimeSyncStatus.status === "success" ? "bg-emerald-500/20 text-emerald-300" :
+              realtimeSyncStatus.status === "error" ? "bg-rose-500/20 text-rose-300" : "bg-white/10 text-white/60"
+            }`} title="เชื่อมโยง Google Sheet เรียลไทม์">
+              <Cloud className="w-4 h-4" />
+            </div>
+          </div>
+        ) : (
+          <div className="mx-2 mb-4 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-[11px] text-white/90 transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Cloud className={`w-3.5 h-3.5 ${realtimeSyncStatus.status === "syncing" ? "text-amber-400 animate-bounce" : "text-emerald-400"}`} />
+                <span>Google Sheet: เรียลไทม์</span>
+              </div>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse" :
+                realtimeSyncStatus.status === "success" ? "bg-emerald-400" :
+                realtimeSyncStatus.status === "error" ? "bg-rose-400" : "bg-emerald-400"
+              }`} />
+            </div>
+            <p className="mt-1 text-[10px] text-white/60 font-medium">
+              {realtimeSyncStatus.status === "syncing" && "กำลังส่งข้อมูลอัตโนมัติ..."}
+              {realtimeSyncStatus.status === "success" && `ซิงค์เรียลไทม์สำเร็จ: ${realtimeSyncStatus.time || "เรียบร้อย"}`}
+              {realtimeSyncStatus.status === "error" && "การเชื่อมโยงเรียลไทม์ติดขัด"}
+              {realtimeSyncStatus.status === "idle" && "ระบบเรียลไทม์พร้อมทำงาน"}
+            </p>
+          </div>
+        )}
 
         {/* Navigation links list */}
         <nav className="flex-1 space-y-1.5">
@@ -934,6 +995,7 @@ export default function App() {
                   bills={getBills()}
                   meters={getMeters()}
                   payments={getPaymentHistory()}
+                  tenants={tenants}
                 />
               )}
               {activeTab === "banks" && (

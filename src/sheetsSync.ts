@@ -604,3 +604,78 @@ export async function pullDirectFromGoogleSheets(
   }
 }
 
+// Real-time automatic synchronization runner (debounced to protect Google APIs and limits)
+let syncTimeout: any = null;
+
+export function triggerRealtimeSync() {
+  if (syncTimeout) {
+    clearTimeout(syncTimeout);
+  }
+
+  // Dispatch event indicating sync is starting/pending
+  window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+    detail: { status: "syncing", message: "กำลังบันทึกข้อมูลเรียลไทม์..." } 
+  }));
+
+  syncTimeout = setTimeout(async () => {
+    // 1. Check if direct Google Sheets OAuth API is available and configured
+    const directSheetId = localStorage.getItem("sabaidee_dorm_direct_sheet_id");
+    const googleToken = localStorage.getItem("sabaidee_dorm_google_token");
+
+    if (directSheetId && googleToken) {
+      console.log("Realtime auto-sync: Pushing to Direct Google Sheets OAuth API...");
+      try {
+        const result = await pushDirectToGoogleSheets(directSheetId, googleToken);
+        if (result.success) {
+          console.log("Realtime auto-sync success (Direct API):", result.message);
+          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+            detail: { status: "success", time: new Date().toLocaleTimeString("th-TH") } 
+          }));
+        } else {
+          console.warn("Realtime auto-sync failed (Direct API):", result.message);
+          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+            detail: { status: "error", message: result.message } 
+          }));
+        }
+      } catch (error: any) {
+        console.warn("Realtime auto-sync error (Direct API):", error);
+        window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+          detail: { status: "error", message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" } 
+        }));
+      }
+      return;
+    }
+
+    // 2. Fallback to standard Apps Script Web App URL
+    const gsUrl = getGsUrl();
+    if (gsUrl) {
+      console.log("Realtime auto-sync: Pushing to Google Sheets Web App...");
+      try {
+        const result = await pushToGoogleSheets(gsUrl);
+        if (result.success) {
+          console.log("Realtime auto-sync success (Apps Script):", result.message);
+          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+            detail: { status: "success", time: new Date().toLocaleTimeString("th-TH") } 
+          }));
+        } else {
+          console.warn("Realtime auto-sync failed (Apps Script):", result.message);
+          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+            detail: { status: "error", message: result.message } 
+          }));
+        }
+      } catch (error: any) {
+        console.warn("Realtime auto-sync error (Apps Script):", error);
+        window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+          detail: { status: "error", message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" } 
+        }));
+      }
+    } else {
+      // No sync targets configured
+      window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+        detail: { status: "idle" } 
+      }));
+    }
+  }, 1500); // Debounce for 1.5 seconds to batch rapid/consecutive writes
+}
+
+
