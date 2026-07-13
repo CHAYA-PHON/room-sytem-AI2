@@ -551,6 +551,12 @@ export default function App() {
     }
   };
 
+  const handleRestartSystem = () => {
+    if (confirm("คุณแน่ใจหรือไม่ที่จะเริ่มระบบใหม่? (ระบบจะโหลดหน้าจอใหม่โดยไม่มีการล้างข้อมูลใดๆ)")) {
+      window.location.reload();
+    }
+  };
+
   // Render Login overlay if session does not exist
   if (!user) {
     return (
@@ -757,9 +763,9 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button 
-                      onClick={handleResetLocalDatabase}
-                      className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
-                      title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                      onClick={handleRestartSystem}
+                      className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      title="เริ่มระบบใหม่ (Restart)"
                       id="mobile-reset-db-btn"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -889,9 +895,9 @@ export default function App() {
             {isSidebarCollapsed ? (
               <div className="flex flex-col items-center gap-2 w-full">
                 <button 
-                  onClick={handleResetLocalDatabase}
-                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
-                  title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                  onClick={handleRestartSystem}
+                  className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
+                  title="เริ่มระบบใหม่ (Restart)"
                   id="sidebar-reset-db-btn-collapsed"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -907,9 +913,9 @@ export default function App() {
             ) : (
               <div className="flex items-center gap-1.5">
                 <button 
-                  onClick={handleResetLocalDatabase}
-                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
-                  title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                  onClick={handleRestartSystem}
+                  className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="เริ่มระบบใหม่ (Restart)"
                   id="sidebar-reset-db-btn"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -952,13 +958,13 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleResetLocalDatabase}
-              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-              title="รีเซ็ตข้อมูลแอปพลิเคชันทั้งหมด"
+              onClick={handleRestartSystem}
+              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+              title="เริ่มระบบใหม่ (Restart)"
               id="header-reset-db-btn"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-bold hidden sm:inline">รีเซ็ตแอป</span>
+              <span className="text-[10px] font-bold hidden sm:inline">เริ่มระบบใหม่</span>
             </button>
             <div className="bg-[#2563eb]/5 px-3 py-1.5 rounded-lg border border-[#2563eb]/10 text-xs text-[#2563eb] font-bold">
               งวดเดือน: <span className="font-mono">{month}</span>
