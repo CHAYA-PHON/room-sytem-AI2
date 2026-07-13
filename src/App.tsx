@@ -23,7 +23,8 @@ import {
   Database,
   Cloud,
   Sparkles,
-  Activity
+  Activity,
+  RotateCcw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -629,7 +630,6 @@ export default function App() {
     { id: "meters", label: "จดจดมิเตอร์กลุ่ม", icon: Gauge },
     { id: "bills", label: "บิลสรุปประจำงวด", icon: FileSpreadsheet },
     { id: "ai", label: "เปรียบเทียบการใช้น้ำไฟ", icon: Activity },
-    { id: "banks", label: "บัญชีรับโอนฝาก", icon: DollarSign },
     { id: "payments", label: "ประวัติทำรายการ", icon: History },
     { id: "admin", label: "ตั้งค่าแอดมิน", icon: Settings }
   ];
@@ -647,7 +647,7 @@ export default function App() {
             <h1 className="text-sm font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
             <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
               <span>Dorm Ops Portal</span>
-              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_0.2</span>
+              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.0</span>
               <span className={`w-1.5 h-1.5 rounded-full ${
                 realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse" :
                 realtimeSyncStatus.status === "success" ? "bg-emerald-400" :
@@ -703,7 +703,7 @@ export default function App() {
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
                     <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Dorm Ops Portal</span>
-                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.6</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.0</span>
                     </p>
                   </div>
                 </div>
@@ -755,16 +755,26 @@ export default function App() {
                     <p className="text-sm font-semibold truncate text-white">{user.username}</p>
                     <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">ผู้จัดการหอพัก</p>
                   </div>
-                  <button 
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      handleLogout();
-                    }}
-                    className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
-                    title="ออกจากระบบ"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={handleResetLocalDatabase}
+                      className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                      id="mobile-reset-db-btn"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      title="ออกจากระบบ"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.aside>
@@ -797,7 +807,7 @@ export default function App() {
               <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
               <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Dorm Ops Portal</span>
-                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_1.6</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.0</span>
               </p>
             </div>
           )}
@@ -876,13 +886,43 @@ export default function App() {
                 <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">ผู้จัดการหอพัก</p>
               </div>
             )}
-            <button 
-              onClick={handleLogout}
-              className={`p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer ${isSidebarCollapsed ? "w-full flex justify-center" : ""}`}
-              title="ออกจากระบบ"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
+            {isSidebarCollapsed ? (
+              <div className="flex flex-col items-center gap-2 w-full">
+                <button 
+                  onClick={handleResetLocalDatabase}
+                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
+                  title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                  id="sidebar-reset-db-btn-collapsed"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
+                  title="ออกจากระบบ"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={handleResetLocalDatabase}
+                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="รีเซ็ตข้อมูลแอปทั้งหมด"
+                  id="sidebar-reset-db-btn"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 bg-white/10 hover:bg-rose-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="ออกจากระบบ"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -911,6 +951,15 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleResetLocalDatabase}
+              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+              title="รีเซ็ตข้อมูลแอปพลิเคชันทั้งหมด"
+              id="header-reset-db-btn"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold hidden sm:inline">รีเซ็ตแอป</span>
+            </button>
             <div className="bg-[#2563eb]/5 px-3 py-1.5 rounded-lg border border-[#2563eb]/10 text-xs text-[#2563eb] font-bold">
               งวดเดือน: <span className="font-mono">{month}</span>
             </div>
@@ -998,13 +1047,6 @@ export default function App() {
                   tenants={tenants}
                 />
               )}
-              {activeTab === "banks" && (
-                <Banks 
-                  banks={banks} 
-                  onSave={handleSaveBanks} 
-                  onDelete={handleDeleteBanks} 
-                />
-              )}
               {activeTab === "payments" && (
                 <PaymentHistory 
                   payments={payments} 
@@ -1040,6 +1082,9 @@ export default function App() {
                   ownerInfo={ownerInfo}
                   onSaveOwnerInfo={handleSaveOwnerInfo}
                   onResetLocalDatabase={handleResetLocalDatabase}
+                  banks={banks}
+                  onSaveBank={handleSaveBanks}
+                  onDeleteBank={handleDeleteBanks}
                 />
               )}
             </motion.div>

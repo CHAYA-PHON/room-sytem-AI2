@@ -20,10 +20,12 @@ import {
   AlertTriangle,
   ExternalLink,
   Key,
-  FolderOpen
+  FolderOpen,
+  DollarSign
 } from "lucide-react";
-import { Admin, UtilityRate, BillAnnouncement, OwnerInfo } from "../types";
+import { Admin, UtilityRate, BillAnnouncement, OwnerInfo, BankAccount } from "../types";
 import { pushDirectToGoogleSheets, pullDirectFromGoogleSheets } from "../sheetsSync";
+import Banks from "./Banks";
 
 interface AdminSettingsProps {
   admins: Admin[];
@@ -44,6 +46,9 @@ interface AdminSettingsProps {
   ownerInfo: OwnerInfo;
   onSaveOwnerInfo: (info: OwnerInfo) => void;
   onResetLocalDatabase?: () => void;
+  banks: BankAccount[];
+  onSaveBank: (bank: BankAccount) => void;
+  onDeleteBank: (id: string) => void;
 }
 
 export default function AdminSettings({ 
@@ -64,7 +69,10 @@ export default function AdminSettings({
   onDeleteBillAnnouncement,
   ownerInfo,
   onSaveOwnerInfo,
-  onResetLocalDatabase
+  onResetLocalDatabase,
+  banks,
+  onSaveBank,
+  onDeleteBank
 }: AdminSettingsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null);
@@ -651,6 +659,24 @@ export default function AdminSettings({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* บัญชีรับโอนฝาก */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 max-w-2xl mt-8 space-y-4">
+        <div className="flex items-center space-x-2.5 pb-4 border-b border-slate-100">
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <DollarSign className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 leading-none">บัญชีรับโอนฝาก</h3>
+            <p className="text-xs text-slate-400 font-semibold mt-1">ตั้งค่าสถาบันการเงินและบัญชีสำหรับแนะนำช่องทางการโอนเงินและพิมพ์แสดงท้ายบิล</p>
+          </div>
+        </div>
+        <Banks 
+          banks={banks} 
+          onSave={onSaveBank} 
+          onDelete={onDeleteBank} 
+        />
       </div>
 
       {/* Dorm Owner Settings Card */}

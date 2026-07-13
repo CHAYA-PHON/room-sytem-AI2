@@ -719,13 +719,13 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
                           setShowDetailedRooms(true);
                         }
                       }}
-                      className={`cursor-pointer border px-3 py-2.5 rounded-xl transition-all duration-150 flex items-center justify-between gap-3 ${
+                      className={`cursor-pointer border px-3 py-2.5 rounded-xl transition-all duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 ${
                         isSelected 
                           ? "bg-blue-50/70 border-blue-500 shadow-sm ring-1 ring-blue-500/20" 
                           : "bg-slate-50/50 hover:bg-slate-50 border-slate-100/70 hover:border-slate-200"
                       }`}
                     >
-                      <div className="shrink-0">
+                      <div className="shrink-0 flex sm:flex-col items-baseline sm:items-start justify-between sm:justify-start gap-1 w-full sm:w-auto">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-800">
                             {item.monthNameTh}
@@ -734,28 +734,24 @@ export default function AIAnalytics({ rooms, bills, meters, payments, tenants }:
                             <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping" />
                           )}
                         </div>
-                        <span className="text-[8px] text-slate-400 font-bold block mt-0.5">
+                        <span className="text-[8px] text-slate-400 font-bold block">
                           ประวัติสะสม {item.yearsRecorded} ปี
                         </span>
                       </div>
                       
                       {/* Compact stacked water & electricity values next to the month name */}
-                      <div className="space-y-1 text-right flex-1 min-w-0">
-                        <div className="flex items-center justify-end gap-1.5 text-[10px]">
-                          <span className="text-slate-400 font-semibold flex items-center gap-1">
-                            <Droplet className="w-3 h-3 text-blue-500 shrink-0" />
-                            <span>น้ำเฉลี่ย</span>
-                          </span>
+                      <div className="space-y-0.5 sm:space-y-1 text-left sm:text-right flex-1 min-w-0 flex flex-row sm:flex-col justify-between sm:justify-end gap-2 sm:gap-0 border-t border-slate-100/60 pt-1.5 sm:pt-0 sm:border-t-0 w-full">
+                        <div className="flex items-center sm:justify-end gap-1 text-[10px]">
+                          <Droplet className="w-3 h-3 text-blue-500 shrink-0" />
+                          <span className="text-slate-400 font-semibold hidden sm:inline mr-0.5">น้ำเฉลี่ย</span>
                           <span className="font-extrabold text-blue-600 font-mono whitespace-nowrap">
                             {item.avgWater.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
                           </span>
                         </div>
                         
-                        <div className="flex items-center justify-end gap-1.5 text-[10px]">
-                          <span className="text-slate-400 font-semibold flex items-center gap-1">
-                            <Zap className="w-3 h-3 text-amber-500 shrink-0" />
-                            <span>ไฟเฉลี่ย</span>
-                          </span>
+                        <div className="flex items-center sm:justify-end gap-1 text-[10px]">
+                          <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                          <span className="text-slate-400 font-semibold hidden sm:inline mr-0.5">ไฟเฉลี่ย</span>
                           <span className="font-extrabold text-amber-600 font-mono whitespace-nowrap">
                             {item.avgElec.toLocaleString("th-TH")} <span className="text-[8px] text-slate-400 font-medium">หน่วย</span>
                           </span>
