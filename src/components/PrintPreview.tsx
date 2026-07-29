@@ -311,7 +311,7 @@ export default function PrintPreview({
             overflow: hidden !important;
           }
 
-          /* Space around dashed cut line on paper */
+          /* Space around dashed cut line on paper and preview screen */
           div[id^="bill-card-"] {
             margin-bottom: 0 !important;
           }
@@ -322,12 +322,22 @@ export default function PrintPreview({
           .print-cut-line {
             margin-top: 0.5cm !important;
             margin-bottom: 0.5cm !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
           }
 
           /* Sharper, higher-contrast table line colors for paper prints */
           table, th, td, tr {
             border-color: #334155 !important; /* Tailwind slate-700 */
           }
+        }
+
+        /* Global rule for screen preview as well */
+        .print-cut-line {
+          margin-top: 0.5cm !important;
+          margin-bottom: 0.5cm !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
         }
       `}} />
       
@@ -397,7 +407,7 @@ export default function PrintPreview({
             return billChunks.map((chunk, pageIndex) => (
               <div 
                 key={pageIndex}
-                className="print-page bg-white p-5 shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-between"
+                className="print-page bg-white p-5 shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-start"
                 style={{ 
                   maxWidth: "794px", 
                   height: billsPerPage === 4 ? "1123px" : "auto",
@@ -405,7 +415,7 @@ export default function PrintPreview({
                   boxSizing: "border-box"
                 }}
               >
-                <div className="flex-1 flex flex-col justify-between py-1">
+                <div className="flex-1 flex flex-col justify-start py-1 gap-0">
                   {(() => {
                     const paddedChunk = [...chunk];
                     while (paddedChunk.length < CHUNK_SIZE) {

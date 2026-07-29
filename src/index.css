@@ -43,6 +43,13 @@
     page-break-inside: avoid !important;
   }
 
+  .print-cut-line {
+    margin-top: 0.5cm !important;
+    margin-bottom: 0.5cm !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
   /* Set A4 page dimensions and reset margins */
   @page {
     size: A4 portrait;
