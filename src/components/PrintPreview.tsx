@@ -357,12 +357,6 @@ export default function PrintPreview({
             <div className="flex items-center space-x-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <span className="text-slate-500 px-2 text-[10px]">บิลต่อหน้า A4:</span>
               <button
-                onClick={() => setBillsPerPage(2)}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 2 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
-              >
-                2 บิล (ขนาดใหญ่)
-              </button>
-              <button
                 onClick={() => setBillsPerPage(3)}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 3 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
               >
@@ -416,12 +410,13 @@ export default function PrintPreview({
             return billChunks.map((chunk, pageIndex) => (
               <div 
                 key={pageIndex}
-                className="print-page bg-white p-4 sm:p-5 shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-between"
+                className="print-page bg-white shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-between"
                 style={{ 
-                  width: "20.0cm",
-                  maxWidth: "20.0cm", 
-                  height: "28.7cm",
-                  minHeight: "28.7cm",
+                  width: "21.0cm",
+                  maxWidth: "21.0cm", 
+                  height: "29.7cm",
+                  minHeight: "29.7cm",
+                  padding: "0.5cm",
                   boxSizing: "border-box"
                 }}
               >
@@ -435,7 +430,7 @@ export default function PrintPreview({
                       if (!b) {
                         return (
                           <React.Fragment key={`empty-${pageIndex}-${bIndex}`}>
-                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 4 ? "6.425cm" : billsPerPage === 3 ? "8.90cm" : "13.85cm" }}>
+                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 3 ? "8.90cm" : "6.425cm" }}>
                               <span className="text-[10px] text-slate-400 font-bold font-sans">✂️ ช่องว่างสำหรับใบแจ้งหนี้ใบที่ {bIndex + 1} (ไม่มีข้อมูล)</span>
                             </div>
                             {bIndex < CHUNK_SIZE - 1 && (
@@ -467,18 +462,17 @@ export default function PrintPreview({
                       const appliedRate = getUtilityRateForMonth(b.month);
 
                       const isCompact = billsPerPage === 4;
-                      const isMedium = billsPerPage === 3;
 
-                      const textClass = isCompact ? "text-[8.5px]" : isMedium ? "text-[10px]" : "text-[11.5px]";
-                      const textClassSmall = isCompact ? "text-[8px]" : isMedium ? "text-[9px]" : "text-[10.5px]";
-                      const textClassHeader = isCompact ? "text-[10px]" : isMedium ? "text-[11px]" : "text-xs";
-                      const paddingClassY = isCompact ? "py-[1px]" : isMedium ? "py-[2px]" : "py-1";
-                      const paddingClassYTight = isCompact ? "py-[0.5px]" : isMedium ? "py-[1px]" : "py-0.5";
-                      const paddingClassYHeader = isCompact ? "py-[2px]" : isMedium ? "py-1" : "py-1.5";
+                      const textClass = isCompact ? "text-[8.5px]" : "text-[10px]";
+                      const textClassSmall = isCompact ? "text-[8px]" : "text-[9px]";
+                      const textClassHeader = isCompact ? "text-[10px]" : "text-[11px]";
+                      const paddingClassY = isCompact ? "py-[1px]" : "py-[2px]";
+                      const paddingClassYTight = isCompact ? "py-[0.5px]" : "py-[1px]";
+                      const paddingClassYHeader = isCompact ? "py-[2px]" : "py-1";
 
                       return (
                         <React.Fragment key={b.billId}>
-                          <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 4 ? "6.425cm" : billsPerPage === 3 ? "8.90cm" : "13.85cm" }}>
+                          <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 3 ? "8.90cm" : "6.425cm" }}>
                             <table className="w-full h-full text-left text-[11px] border-collapse border-[1.5px] border-black font-sans leading-tight">
                               <tbody>
                                 {/* Row 1: Header */}
