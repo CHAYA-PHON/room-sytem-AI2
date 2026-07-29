@@ -53,6 +53,6 @@
   /* Set A4 page dimensions and reset margins */
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 0.5cm;
   }
 }

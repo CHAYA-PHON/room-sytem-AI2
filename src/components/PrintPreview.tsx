@@ -295,11 +295,11 @@ export default function PrintPreview({
 
           /* Specific styles for print pages to avoid page breaks in the middle of a bill */
           .print-page {
-            width: ${type === "invoices" ? "794px" : "100%"} !important;
-            max-width: ${type === "invoices" ? "794px" : "100%"} !important;
-            height: ${type === "invoices" ? "1123px" : "auto"} !important;
-            min-height: ${type === "invoices" ? "1123px" : "0"} !important;
-            padding: ${type === "invoices" ? (billsPerPage === 4 ? "8px 16px" : "20px 24px") : "0"} !important;
+            width: ${type === "invoices" ? "20.0cm" : "100%"} !important;
+            max-width: ${type === "invoices" ? "20.0cm" : "100%"} !important;
+            height: ${type === "invoices" ? "28.7cm" : "auto"} !important;
+            min-height: ${type === "invoices" ? "28.7cm" : "0"} !important;
+            padding: 0 !important;
             margin: 0 auto !important;
             box-shadow: none !important;
             border: none !important;
@@ -309,6 +309,9 @@ export default function PrintPreview({
             break-inside: avoid !important;
             break-after: always !important;
             overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
           }
 
           /* Space around dashed cut line on paper and preview screen */
@@ -354,16 +357,22 @@ export default function PrintPreview({
             <div className="flex items-center space-x-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <span className="text-slate-500 px-2 text-[10px]">บิลต่อหน้า A4:</span>
               <button
-                onClick={() => setBillsPerPage(4)}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 4 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
+                onClick={() => setBillsPerPage(2)}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 2 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
               >
-                4 บิล
+                2 บิล (ขนาดใหญ่)
               </button>
               <button
                 onClick={() => setBillsPerPage(3)}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 3 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
               >
-                3 บิล (ลดความแน่น)
+                3 บิล
+              </button>
+              <button
+                onClick={() => setBillsPerPage(4)}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${billsPerPage === 4 ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                4 บิล (ประหยัดกระดาษ)
               </button>
             </div>
           )}
@@ -407,15 +416,16 @@ export default function PrintPreview({
             return billChunks.map((chunk, pageIndex) => (
               <div 
                 key={pageIndex}
-                className="print-page bg-white p-5 shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-start"
+                className="print-page bg-white p-4 sm:p-5 shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-between"
                 style={{ 
-                  maxWidth: "794px", 
-                  height: billsPerPage === 4 ? "1123px" : "auto",
-                  minHeight: billsPerPage === 4 ? "1123px" : "0",
+                  width: "20.0cm",
+                  maxWidth: "20.0cm", 
+                  height: "28.7cm",
+                  minHeight: "28.7cm",
                   boxSizing: "border-box"
                 }}
               >
-                <div className="flex-1 flex flex-col justify-start py-1 gap-0">
+                <div className="flex-1 w-full h-full flex flex-col justify-between py-0">
                   {(() => {
                     const paddedChunk = [...chunk];
                     while (paddedChunk.length < CHUNK_SIZE) {
@@ -425,7 +435,7 @@ export default function PrintPreview({
                       if (!b) {
                         return (
                           <React.Fragment key={`empty-${pageIndex}-${bIndex}`}>
-                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 4 ? "230px" : "310px" }}>
+                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 4 ? "6.425cm" : billsPerPage === 3 ? "8.90cm" : "13.85cm" }}>
                               <span className="text-[10px] text-slate-400 font-bold font-sans">✂️ ช่องว่างสำหรับใบแจ้งหนี้ใบที่ {bIndex + 1} (ไม่มีข้อมูล)</span>
                             </div>
                             {bIndex < CHUNK_SIZE - 1 && (
@@ -457,17 +467,19 @@ export default function PrintPreview({
                       const appliedRate = getUtilityRateForMonth(b.month);
 
                       const isCompact = billsPerPage === 4;
-                      const textClass = isCompact ? "text-[9px]" : "text-[11px]";
-                      const textClassSmall = isCompact ? "text-[8.5px]" : "text-[10px]";
-                      const textClassHeader = isCompact ? "text-[11px]" : "text-xs";
-                      const paddingClassY = isCompact ? "py-[2px]" : "py-1";
-                      const paddingClassYTight = isCompact ? "py-[1px]" : "py-0.5";
-                      const paddingClassYHeader = isCompact ? "py-1" : "py-1.5";
+                      const isMedium = billsPerPage === 3;
+
+                      const textClass = isCompact ? "text-[8.5px]" : isMedium ? "text-[10px]" : "text-[11.5px]";
+                      const textClassSmall = isCompact ? "text-[8px]" : isMedium ? "text-[9px]" : "text-[10.5px]";
+                      const textClassHeader = isCompact ? "text-[10px]" : isMedium ? "text-[11px]" : "text-xs";
+                      const paddingClassY = isCompact ? "py-[1px]" : isMedium ? "py-[2px]" : "py-1";
+                      const paddingClassYTight = isCompact ? "py-[0.5px]" : isMedium ? "py-[1px]" : "py-0.5";
+                      const paddingClassYHeader = isCompact ? "py-[2px]" : isMedium ? "py-1" : "py-1.5";
 
                       return (
                         <React.Fragment key={b.billId}>
-                          <div className="w-full" id={`bill-card-${b.billId}`}>
-                            <table className="w-full text-left text-[11px] border-collapse border-[1.5px] border-black font-sans leading-tight">
+                          <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 4 ? "6.425cm" : billsPerPage === 3 ? "8.90cm" : "13.85cm" }}>
+                            <table className="w-full h-full text-left text-[11px] border-collapse border-[1.5px] border-black font-sans leading-tight">
                               <tbody>
                                 {/* Row 1: Header */}
                                 <tr>
