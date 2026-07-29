@@ -461,21 +461,21 @@ export default function PrintPreview({
 
                       const isCompact = billsPerPage === 4;
 
-                      const textClass = isCompact ? "text-[8.5px]" : "text-[10px]";
-                      const textClassSmall = isCompact ? "text-[8px]" : "text-[9px]";
-                      const textClassHeader = isCompact ? "text-[10px]" : "text-[11px]";
-                      const paddingClassY = isCompact ? "py-[1px]" : "py-[2px]";
-                      const paddingClassYTight = isCompact ? "py-[0.5px]" : "py-[1px]";
-                      const paddingClassYHeader = isCompact ? "py-[2px]" : "py-1";
+                      const textClass = isCompact ? "text-[9.5px]" : "text-[11.5px]";
+                      const textClassSmall = isCompact ? "text-[9px]" : "text-[10.5px]";
+                      const textClassHeader = isCompact ? "text-[11px]" : "text-[13px]";
+                      const paddingClassY = isCompact ? "py-[1.5px]" : "py-[2.5px]";
+                      const paddingClassYTight = isCompact ? "py-[1px]" : "py-[2px]";
+                      const paddingClassYHeader = isCompact ? "py-[2.5px]" : "py-1.5";
 
                       return (
                         <React.Fragment key={b.billId}>
                           <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 3 ? "9.30cm" : "6.88cm" }}>
-                            <table className="w-full h-full text-left text-[11px] border-collapse border-[1.5px] border-black font-sans leading-tight">
+                            <table className="w-full h-full text-left text-[11.5px] border-collapse border-[1.5px] border-black font-sans leading-tight">
                               <tbody>
                                 {/* Row 1: Header */}
                                 <tr>
-                                  <td colSpan={6} className={`text-center font-bold bg-[#b4c6e7] border border-black ${paddingClassYHeader} ${textClassHeader} uppercase tracking-wider text-black`}>
+                                  <td colSpan={6} className={`text-center font-black bg-[#b4c6e7] border border-black ${paddingClassYHeader} ${textClassHeader} uppercase tracking-wider text-black`}>
                                     ใบแจ้งหนี้
                                   </td>
                                 </tr>
@@ -499,7 +499,7 @@ export default function PrintPreview({
                                 </tr>
 
                                 {/* Row 3: List Header */}
-                                <tr className={`bg-slate-50 font-bold text-center ${isCompact ? "text-[8px]" : "text-[9px]"} border-b border-black text-slate-800`}>
+                                <tr className={`bg-slate-50 font-extrabold text-center ${isCompact ? "text-[9px]" : "text-[10.5px]"} border-b border-black text-slate-800`}>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-left`}>รายการ</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black`}>เลขครั้งก่อน</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black`}>เลขครั้งหลัง</td>
@@ -510,7 +510,7 @@ export default function PrintPreview({
 
                                 {/* Row 4: Water */}
                                 <tr className={`text-black ${textClassSmall}`}>
-                                  <td className={`px-2 ${paddingClassYTight} border border-black font-medium`}>ค่าน้ำ</td>
+                                  <td className={`px-2 ${paddingClassYTight} border border-black font-semibold`}>ค่าน้ำ</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>{prevWater}</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>{currWater}</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>25</td>
@@ -522,7 +522,7 @@ export default function PrintPreview({
 
                                 {/* Row 5: Electricity */}
                                 <tr className={`text-black ${textClassSmall}`}>
-                                  <td className={`px-2 ${paddingClassYTight} border border-black font-medium`}>ค่าไฟฟ้า</td>
+                                  <td className={`px-2 ${paddingClassYTight} border border-black font-semibold`}>ค่าไฟฟ้า</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>{prevElec}</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>{currElec}</td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-center font-mono`}>9</td>
@@ -534,7 +534,7 @@ export default function PrintPreview({
 
                                 {/* Row 6: Rent */}
                                 <tr className={`text-black ${textClassSmall}`}>
-                                  <td colSpan={5} className={`px-2 ${paddingClassYTight} border border-black font-medium`}>
+                                  <td colSpan={5} className={`px-2 ${paddingClassYTight} border border-black font-semibold`}>
                                     ค่าเช่า {new Intl.NumberFormat("th-TH").format(Math.max(0, b.rentCost - 30))} บาท / ค่าขยะ 30 บาท
                                   </td>
                                   <td className={`px-2 ${paddingClassYTight} border border-black text-right font-mono font-bold`}>
@@ -544,7 +544,7 @@ export default function PrintPreview({
 
                                 {/* Row 7: Added items / WiFi / Trash */}
                                 <tr className={`text-black ${textClassSmall}`}>
-                                  <td className={`px-2 ${paddingClassYTight} border border-black font-medium`}>อื่นๆ</td>
+                                  <td className={`px-2 ${paddingClassYTight} border border-black font-semibold`}>อื่นๆ</td>
                                   <td colSpan={4} className={`px-2 ${paddingClassYTight} border border-black text-center font-semibold text-slate-500`}>
                                     {addedNames}
                                   </td>
@@ -566,10 +566,10 @@ export default function PrintPreview({
 
                                 {/* Row 9: Total (Yellow bg, Red bold number) */}
                                 <tr className={`bg-[#fff2cc] text-black font-extrabold ${textClass}`}>
-                                  <td colSpan={5} className={`px-2 ${paddingClassY} border border-black text-center ${isCompact ? "text-[11px]" : "text-xs"} font-black`}>
+                                  <td colSpan={5} className={`px-2 ${paddingClassY} border border-black text-center ${isCompact ? "text-[11.5px]" : "text-[13.5px]"} font-black`}>
                                     รวมเป็นเงิน
                                   </td>
-                                  <td className={`px-2 ${paddingClassY} border border-black text-right font-mono ${isCompact ? "text-[11px]" : "text-xs"} font-black text-rose-600`}>
+                                  <td className={`px-2 ${paddingClassY} border border-black text-right font-mono ${isCompact ? "text-[11.5px]" : "text-[13.5px]"} font-black text-rose-600`}>
                                     {new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(b.total)}
                                   </td>
                                 </tr>
@@ -595,14 +595,14 @@ export default function PrintPreview({
                                 )}
 
                                 {/* Row 12: Footer */}
-                                <tr className={`bg-slate-100 text-black ${isCompact ? "text-[8px]" : "text-[9px]"} font-bold`}>
+                                <tr className={`bg-slate-100 text-black ${isCompact ? "text-[9px]" : "text-[10.5px]"} font-bold`}>
                                   <td colSpan={2} className={`px-2 ${paddingClassY} border border-black leading-tight`}>
                                     <div className="font-extrabold text-slate-700">หมายเหตุ:</div>
-                                    <div className={`font-mono ${isCompact ? "text-[9px]" : "text-[10px]"} font-black leading-none`}>{room?.name || b.roomId}</div>
+                                    <div className={`font-mono ${isCompact ? "text-[10px]" : "text-[11.5px]"} font-black leading-none`}>{room?.name || b.roomId}</div>
                                     
                                     {/* ค่าน้ำ/ค่าไฟขั้นต่ำ */}
                                     {room && (
-                                      <div className="text-[8px] text-rose-700 font-extrabold mt-0.5 space-y-0.5 leading-tight">
+                                      <div className="text-[8.5px] text-rose-700 font-extrabold mt-0.5 space-y-0.5 leading-tight">
                                         {room.minWater > 0 && b.waterCost === room.minWater && (
                                           <div>* ค่าน้ำคิดราคาขั้นต่ำ {room.minWater} บ.</div>
                                         )}
@@ -617,7 +617,7 @@ export default function PrintPreview({
                                       const nextRate = [...futureRates].sort((a, b) => a.startMonth.localeCompare(b.startMonth))[0];
                                       if (!nextRate) return null;
                                       return (
-                                        <div className="text-[7.5px] text-blue-800 font-extrabold mt-1 leading-none">
+                                        <div className="text-[8px] text-blue-800 font-extrabold mt-1 leading-none">
                                           *น้ำ {nextRate.waterRate}บ./ไฟ {nextRate.elecRate}บ. (เริ่มรอบ {formatAdMonthYear(nextRate.startMonth)})
                                         </div>
                                       );
@@ -625,19 +625,19 @@ export default function PrintPreview({
                                   </td>
                                   <td colSpan={4} className={`px-2 ${paddingClassY} border border-black text-center align-middle bg-white`}>
                                     {room?.payMethod === "โอนธนาคาร" && recommendedBank ? (
-                                      <div className={`${isCompact ? "text-[8.5px]" : "text-[10px]"} leading-tight py-0.5`}>
+                                      <div className={`${isCompact ? "text-[9.5px]" : "text-[11px]"} leading-tight py-0.5`}>
                                         <div>โอนเงิน: <strong className="text-blue-700 font-extrabold">{recommendedBank.bankName}</strong> บัญชี <strong className="font-mono text-blue-700">{recommendedBank.accountNumber}</strong></div>
-                                        <div className={`${isCompact ? "text-[7.5px]" : "text-[9px]"} text-slate-700 mt-0.5`}>ชื่อบัญชี: <strong className="font-semibold">{recommendedBank.accountName}</strong></div>
+                                        <div className={`${isCompact ? "text-[8.5px]" : "text-[10px]"} text-slate-700 mt-0.5`}>ชื่อบัญชี: <strong className="font-semibold">{recommendedBank.accountName}</strong></div>
                                         {recommendedBank.footerNote && (
-                                          <div className={`${isCompact ? "text-[7.5px]" : "text-[8.5px]"} text-rose-700 font-bold mt-1 border-t border-dotted border-slate-300 pt-0.5 leading-tight`}>
+                                          <div className={`${isCompact ? "text-[8.5px]" : "text-[9.5px]"} text-rose-700 font-bold mt-1 border-t border-dotted border-slate-300 pt-0.5 leading-tight`}>
                                             {recommendedBank.footerNote}
                                           </div>
                                         )}
                                       </div>
                                     ) : (
-                                      <div className={`text-slate-800 font-extrabold ${isCompact ? "text-[8.5px]" : "text-[10px]"} leading-tight py-1`}>
+                                      <div className={`text-slate-800 font-extrabold ${isCompact ? "text-[9.5px]" : "text-[11px]"} leading-tight py-1`}>
                                         <div>ชำระเงินสด: <strong className="text-blue-700 font-extrabold">{ownerInfo?.name || "คุณวิภาวรรณ สุขประเสริฐ"}</strong></div>
-                                        <div className={`${isCompact ? "text-[7.5px]" : "text-[9px]"} text-slate-700 mt-0.5`}>ติดต่อ: <strong className="font-mono text-blue-700">{ownerInfo?.phone || "081-234-5678"}</strong></div>
+                                        <div className={`${isCompact ? "text-[8.5px]" : "text-[10px]"} text-slate-700 mt-0.5`}>ติดต่อ: <strong className="font-mono text-blue-700">{ownerInfo?.phone || "081-234-5678"}</strong></div>
                                       </div>
                                     )}
                                   </td>
@@ -652,7 +652,7 @@ export default function PrintPreview({
                                   if (!nextFutureRate && activeAnnouncements.length === 0) return null;
 
                                   return (
-                                    <tr className="bg-amber-50/40 text-black text-[9px]">
+                                    <tr className="bg-amber-50/40 text-black text-[10px]">
                                       <td colSpan={6} className="px-2.5 py-1.5 border border-black font-semibold leading-normal">
                                         {nextFutureRate && (
                                           <div className="text-blue-800 font-extrabold flex items-start gap-1 mt-0.5">
