@@ -311,12 +311,17 @@ export default function PrintPreview({
             overflow: hidden !important;
           }
 
-          /* SNUG space between multiple bills on paper */
+          /* Space around dashed cut line on paper */
           div[id^="bill-card-"] {
-            margin-bottom: ${billsPerPage === 4 ? "4px" : "12px"} !important;
+            margin-bottom: 0 !important;
           }
           div[id^="bill-card-"]:last-child {
             margin-bottom: 0 !important;
+          }
+
+          .print-cut-line {
+            margin-top: 0.5cm !important;
+            margin-bottom: 0.5cm !important;
           }
 
           /* Sharper, higher-contrast table line colors for paper prints */
@@ -414,7 +419,10 @@ export default function PrintPreview({
                               <span className="text-[10px] text-slate-400 font-bold font-sans">✂️ ช่องว่างสำหรับใบแจ้งหนี้ใบที่ {bIndex + 1} (ไม่มีข้อมูล)</span>
                             </div>
                             {bIndex < CHUNK_SIZE - 1 && (
-                              <div className={`w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none ${billsPerPage === 4 ? "my-1" : "my-2.5"}`}>
+                              <div 
+                                className="w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none print-cut-line"
+                                style={{ marginTop: "0.5cm", marginBottom: "0.5cm" }}
+                              >
                                 <span className="bg-white px-2 font-mono flex items-center gap-1">✂️ ตัดตามรอยประ (แผ่นที่ {pageIndex + 1})</span>
                               </div>
                             )}
@@ -654,7 +662,10 @@ export default function PrintPreview({
 
                           {/* Divider showing scissors only between bills inside the page */}
                           {bIndex < CHUNK_SIZE - 1 && (
-                            <div className={`w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none ${isCompact ? "my-1" : "my-2.5"}`}>
+                            <div 
+                              className="w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none print-cut-line"
+                              style={{ marginTop: "0.5cm", marginBottom: "0.5cm" }}
+                            >
                               <span className="bg-white px-2 font-mono flex items-center gap-1">✂️ ตัดตามรอยประ (แผ่นที่ {pageIndex + 1})</span>
                             </div>
                           )}
