@@ -410,7 +410,7 @@ export default function PrintPreview({
             return billChunks.map((chunk, pageIndex) => (
               <div 
                 key={pageIndex}
-                className="print-page bg-white shadow-2xl rounded-2xl border border-slate-200 w-full relative flex flex-col justify-between"
+                className="print-page bg-white shadow-2xl rounded-sm border border-slate-200 w-full relative flex flex-col justify-between"
                 style={{ 
                   width: "21.0cm",
                   maxWidth: "21.0cm", 
