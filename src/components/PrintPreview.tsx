@@ -323,8 +323,8 @@ export default function PrintPreview({
           }
 
           .print-cut-line {
-            margin-top: 0.5cm !important;
-            margin-bottom: 0.5cm !important;
+            margin-top: 0.2cm !important;
+            margin-bottom: 0.2cm !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
           }
@@ -337,8 +337,8 @@ export default function PrintPreview({
 
         /* Global rule for screen preview as well */
         .print-cut-line {
-          margin-top: 0.5cm !important;
-          margin-bottom: 0.5cm !important;
+          margin-top: 0.2cm !important;
+          margin-bottom: 0.2cm !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;
         }
@@ -430,16 +430,14 @@ export default function PrintPreview({
                       if (!b) {
                         return (
                           <React.Fragment key={`empty-${pageIndex}-${bIndex}`}>
-                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 3 ? "8.90cm" : "6.425cm" }}>
+                            <div className="w-full opacity-30 border-[1.5px] border-dashed border-slate-300 rounded-lg flex items-center justify-center select-none" style={{ height: billsPerPage === 3 ? "9.30cm" : "6.88cm" }}>
                               <span className="text-[10px] text-slate-400 font-bold font-sans">✂️ ช่องว่างสำหรับใบแจ้งหนี้ใบที่ {bIndex + 1} (ไม่มีข้อมูล)</span>
                             </div>
                             {bIndex < CHUNK_SIZE - 1 && (
                               <div 
-                                className="w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none print-cut-line"
-                                style={{ marginTop: "0.5cm", marginBottom: "0.5cm" }}
-                              >
-                                <span className="bg-white px-2 font-mono flex items-center gap-1">✂️ ตัดตามรอยประ (แผ่นที่ {pageIndex + 1})</span>
-                              </div>
+                                className="w-full border-t border-dashed border-slate-400 select-none print-cut-line"
+                                style={{ marginTop: "0.2cm", marginBottom: "0.2cm" }}
+                              />
                             )}
                           </React.Fragment>
                         );
@@ -472,7 +470,7 @@ export default function PrintPreview({
 
                       return (
                         <React.Fragment key={b.billId}>
-                          <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 3 ? "8.90cm" : "6.425cm" }}>
+                          <div className="w-full flex flex-col justify-between" id={`bill-card-${b.billId}`} style={{ height: billsPerPage === 3 ? "9.30cm" : "6.88cm" }}>
                             <table className="w-full h-full text-left text-[11px] border-collapse border-[1.5px] border-black font-sans leading-tight">
                               <tbody>
                                 {/* Row 1: Header */}
@@ -679,11 +677,9 @@ export default function PrintPreview({
                           {/* Divider showing scissors only between bills inside the page */}
                           {bIndex < CHUNK_SIZE - 1 && (
                             <div 
-                              className="w-full border-t border-dashed border-slate-400 flex items-center justify-center text-[9px] text-slate-500 select-none print-cut-line"
-                              style={{ marginTop: "0.5cm", marginBottom: "0.5cm" }}
-                            >
-                              <span className="bg-white px-2 font-mono flex items-center gap-1">✂️ ตัดตามรอยประ (แผ่นที่ {pageIndex + 1})</span>
-                            </div>
+                              className="w-full border-t border-dashed border-slate-400 select-none print-cut-line"
+                              style={{ marginTop: "0.2cm", marginBottom: "0.2cm" }}
+                            />
                           )}
                         </React.Fragment>
                       );
