@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { DoorOpen, Calculator, CheckCircle2, AlertTriangle, Building2, Eye } from "lucide-react";
+import { DoorOpen, Calculator, CheckCircle2, AlertTriangle, Building2, Eye, RefreshCw, UploadCloud } from "lucide-react";
 import { motion } from "motion/react";
 
 interface DashboardProps {
@@ -22,10 +22,21 @@ interface DashboardProps {
   onNavigateToRooms: () => void;
   lastSyncTime?: string;
   onSync?: () => void;
+  onPull?: () => void;
+  onPush?: () => void;
   isSyncing?: boolean;
 }
 
-export default function Dashboard({ data, month, onNavigateToRooms, lastSyncTime, onSync, isSyncing }: DashboardProps) {
+export default function Dashboard({ 
+  data, 
+  month, 
+  onNavigateToRooms, 
+  lastSyncTime, 
+  onSync, 
+  onPull, 
+  onPush, 
+  isSyncing 
+}: DashboardProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB" }).format(amount);
   };
@@ -187,19 +198,35 @@ export default function Dashboard({ data, month, onNavigateToRooms, lastSyncTime
         {/* Footer Bar (Contextual Info) */}
         <div className="px-6 md:px-8 py-3.5 bg-[#1e293b] text-white/50 text-[10px] flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="flex flex-wrap gap-4 items-center">
-             <span className="uppercase font-bold tracking-wider">CONNECTED TO GOOGLE SHEETS: <b className="text-white font-black">ACTIVE (WEB APP)</b></span>
+             <span className="uppercase font-bold tracking-wider flex items-center gap-1.5">
+               <span>ฐานข้อมูลหลัก:</span>
+               <b className="text-emerald-400 font-black">GOOGLE SHEETS (MASTER DB)</b>
+             </span>
              <span className="hidden sm:inline text-white/35">|</span>
              <span className="uppercase font-bold">TOTAL REVENUE ({month}): <b className="text-emerald-400 font-mono font-bold">{formatCurrency(data.monthlyPaid)}</b></span>
           </div>
-          <div className="flex items-center gap-4 uppercase font-bold tracking-widest text-blue-400">
-             <span>LAST SYNC: {lastSyncTime || "ยังไม่ได้ซิงค์"}</span>
-             {onSync && (
+          <div className="flex items-center gap-3 uppercase font-bold tracking-wider text-slate-300">
+             <span className="text-slate-400 font-mono text-[10px]">ซิงค์ล่าสุด: {lastSyncTime || "พร้อมทำงาน"}</span>
+             {onPull && (
                <button 
-                 onClick={onSync}
+                 onClick={onPull}
                  disabled={isSyncing}
-                 className="px-3 py-1 bg-[#2563eb] hover:bg-blue-700 text-white font-sans text-[10px] font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-sans text-[10px] font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                 title="ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก)"
                >
-                 {isSyncing ? "กำลังซิงค์..." : "ซิงค์ด่วน"}
+                 <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin" : ""}`} />
+                 <span>{isSyncing ? "กำลังดึง..." : "ดึงข้อมูลจากชีต (Pull)"}</span>
+               </button>
+             )}
+             {onPush && (
+               <button 
+                 onClick={onPush}
+                 disabled={isSyncing}
+                 className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-slate-200 hover:text-white font-sans text-[10px] font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1 border border-slate-600"
+                 title="ส่งข้อมูลในระบบขึ้นไปบันทึกลง Google Sheets (จะมีการแจ้งเตือนก่อนบันทึกทับ)"
+               >
+                 <UploadCloud className="w-3 h-3 text-slate-300" />
+                 <span>ส่งขึ้นชีต (Push)</span>
                </button>
              )}
           </div>

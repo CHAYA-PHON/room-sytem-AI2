@@ -21,7 +21,8 @@ import {
   ExternalLink,
   Key,
   FolderOpen,
-  DollarSign
+  DollarSign,
+  Download
 } from "lucide-react";
 import { Admin, UtilityRate, BillAnnouncement, OwnerInfo, BankAccount } from "../types";
 import { pushDirectToGoogleSheets, pullDirectFromGoogleSheets } from "../sheetsSync";
@@ -778,34 +779,42 @@ export default function AdminSettings({
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">สถานะการทำงาน</span>
-              <span className="text-xs font-bold text-slate-700">ซิงค์ล่าสุด: <strong className="text-[#2563eb] font-mono">{lastSyncTime}</strong></span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500">ฐานข้อมูลหลัก (MASTER DB):</span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">GOOGLE SHEETS</span>
+              </div>
+              <span className="text-xs font-bold text-slate-700">ซิงค์ล่าสุด: <strong className="text-[#2563eb] font-mono">{lastSyncTime || "พร้อมทำงาน"}</strong></span>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => onPullFromSheets(inputGsUrl)}
                 disabled={isSyncing}
-                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                title="ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก) มาอัปเดตลงระบบ"
               >
-                {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#2563eb]" /> : <DownloadCloud className="w-3.5 h-3.5 text-slate-500" />}
-                <span>ดึงข้อมูล (Pull)</span>
+                {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" /> : <DownloadCloud className="w-3.5 h-3.5 text-white" />}
+                <span>ดึงข้อมูล (Pull จากชีต)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => onPushToSheets(inputGsUrl)}
                 disabled={isSyncing}
-                className="px-4 py-2 bg-[#2563eb] hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                className="px-3.5 py-2 bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                title="ส่งข้อมูลจากระบบไปบันทึกทับลงบน Google Sheets (มีระบบแจ้งเตือนยืนยัน)"
               >
-                {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" /> : <UploadCloud className="w-3.5 h-3.5 text-white" />}
-                <span>ส่งข้อมูล (Push)</span>
+                {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-600" /> : <UploadCloud className="w-3.5 h-3.5 text-slate-500" />}
+                <span>ส่งข้อมูล (Push ไปชีต)</span>
               </button>
             </div>
           </div>
+          <p className="text-[11px] text-slate-500 italic">
+            * หมายเหตุ: <strong>Google Sheets เป็นฐานข้อมูลหลัก (Master DB)</strong> ข้อมูลในแอปจะถูกดึงมาจาก Google Sheets อัตโนมัติเมื่อเปิดระบบ และระบบจะไม่ทำการส่งข้อมูลไปเขียนทับ (Auto-Push) โดยไม่ได้รับคำสั่ง
+          </p>
 
           {/* Configuration Instructions */}
           <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100 text-xs text-slate-800 space-y-3">
@@ -820,6 +829,74 @@ export default function AdminSettings({
               <li><strong className="text-slate-900 font-bold">ตรวจสอบและออกบิลสรุป:</strong> เรียกดูและสั่งพิมพ์ใบแจ้งหนี้แบบเดี่ยวรายห้อง หรือพิมพ์สรุปงบการเงินแบบรวม 15 ห้องต่อหน้าเพื่อความสะดวกรวดเร็ว</li>
               <li><strong className="text-slate-900 font-bold">ชำระเงินแบบตัดบิล FIFO:</strong> บันทึกรับชำระเงินโดยระบบจะหักลบยอดหนี้ค้างเก่าตามลำดับประวัติบิลก่อนหลังอย่างถูกต้องแม่นยำ</li>
             </ol>
+          </div>
+        </div>
+      </div>
+
+      {/* Download Project ZIP to PC Card */}
+      <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6 max-w-2xl mt-8 space-y-4 animate-in fade-in" id="download-project-card">
+        <div className="flex items-center space-x-2.5 pb-3 border-b border-slate-100">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <Download className="w-5 h-5 text-[#2563eb]" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 leading-none">ดาวน์โหลดไฟล์ APP ทั้งหมดลงเครื่อง PC</h3>
+            <p className="text-xs text-slate-400 font-semibold mt-1">แพ็กซอร์สโค้ดและไฟล์ระบบทั้งหมดเป็นไฟล์ .ZIP เพื่อนำไปเปิดรันบนคอมพิวเตอร์ของคุณ</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>ชุดโค้ดโปรเจกต์ Sabaidee Dormitory (.ZIP)</span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold">~184 KB</span>
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">รวมไฟล์ต้นฉบับทั้งหมด (React, TypeScript, Tailwind CSS, เซิร์ฟเวอร์ Express และคู่มือติดตั้งในโฟลเดอร์ sabaidee-dormitory)</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="/api/download-project"
+                download="sabaidee-dorm-project.zip"
+                className="px-4 py-2.5 bg-[#2563eb] hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>ดาวน์โหลดไฟล์ ZIP</span>
+              </a>
+              <a
+                href="/api/download-project"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+                title="เปิดดาวน์โหลดในแท็บใหม่ (แก้ปัญหาเบราว์เซอร์บล็อกการโหลดในเฟรม)"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+
+          {/* Windows Compatibility Notice */}
+          <div className="pt-2 border-t border-slate-200/80 flex items-start gap-2 text-[11px] text-blue-900 bg-blue-50/70 p-2.5 rounded-lg border border-blue-100/70 leading-relaxed font-medium">
+            <span className="text-base leading-none">✅</span>
+            <p>
+              <strong>ปรับแต่งรองรับการแยกแฟ้มบน Windows เรียบร้อย:</strong> ไฟล์นี้ได้รับการสร้างโครงสร้างโฟลเดอร์หลัก <code className="bg-white px-1 py-0.5 rounded font-mono font-bold">sabaidee-dormitory/</code> พร้อม Directory Attributes ตามมาตรฐาน ทำให้สามารถคลิกขวาเลือก <strong>"แยกแฟ้มทั้งหมด... (Extract All)"</strong> บน Windows ได้ทันทีโดยไม่ติดกล่องข้อความ "โฟลเดอร์ที่บีบอัดว่างเปล่า" อีกต่อไปครับ
+            </p>
+          </div>
+
+          <div className="pt-2 text-[11.5px] text-slate-600 space-y-1.5 font-medium">
+            <div className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+              <span>💻 วิธีเปิดใช้งานบนคอมพิวเตอร์ของคุณ:</span>
+            </div>
+            <p>1. แตกไฟล์ <strong>sabaidee-dorm-project.zip</strong> บนเครื่อง PC (คลิกขวา &gt; Extract All...)</p>
+            <p>2. ตรวจสอบว่าเครื่องมี <strong className="text-blue-600">Node.js</strong> (ดาวน์โหลดฟรีได้ที่ nodejs.org)</p>
+            <p>3. เปิด Terminal หรือ Command Prompt ในโฟลเดอร์ <strong>sabaidee-dormitory</strong> แล้วพิมพ์:</p>
+            <div className="bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[11px] space-y-1 my-1.5 selection:bg-blue-500">
+              <p className="text-emerald-400"># 1. ติดตั้งไลบรารี</p>
+              <p>npm install</p>
+              <p className="text-emerald-400 mt-1"># 2. เริ่มต้นรันแอปพลิเคชัน</p>
+              <p>npm run dev</p>
+            </div>
+            <p>4. เปิดเบราว์เซอร์แล้วพิมพ์: <code className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold font-mono">http://localhost:3000</code></p>
           </div>
         </div>
       </div>

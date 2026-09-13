@@ -1,5 +1,7 @@
 import express from "express";
 import path from "path";
+import { exec } from "child_process";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -12,6 +14,37 @@ app.use(express.json({ limit: "10mb" }));
 // Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Download Project as ZIP endpoint
+app.get(["/api/download-project", "/api/download-zip"], (req, res) => {
+  const targetZip = "/tmp/sabaidee-dorm-project.zip";
+  const publicZip = path.join(process.cwd(), "public", "sabaidee-dorm-project.zip");
+
+  const sendFile = (filePath: string) => {
+    const stat = fs.statSync(filePath);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", 'attachment; filename="sabaidee-dorm-project.zip"');
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Cache-Control", "no-cache");
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  };
+
+  if (fs.existsSync(targetZip)) {
+    sendFile(targetZip);
+  } else if (fs.existsSync(publicZip)) {
+    sendFile(publicZip);
+  } else {
+    const scriptPath = path.join(process.cwd(), "scripts", "create_zip.py");
+    exec(`python3 "${scriptPath}"`, (err) => {
+      if (!err && fs.existsSync(targetZip)) {
+        sendFile(targetZip);
+      } else {
+        res.status(500).json({ error: "ZIP_ERROR", message: "ไม่สามารถสร้างไฟล์ ZIP ได้" });
+      }
+    });
+  }
 });
 
 // AI Analytics endpoint using Gemini API

@@ -24,7 +24,11 @@ import {
   Cloud,
   Sparkles,
   Activity,
-  RotateCcw
+  RotateCcw,
+  RefreshCw,
+  Download,
+  X,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -103,6 +107,30 @@ export default function App() {
   const [loginPin, setLoginPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  const handleDownloadProject = async () => {
+    setIsDownloadingZip(true);
+    try {
+      const response = await fetch("/api/download-project");
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "sabaidee-dorm-project.zip";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.warn("Direct blob download fallback to new tab:", err);
+      window.open("/api/download-project", "_blank");
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
 
   // System general month selection
   const [month, setMonth] = useState<string>("2026-07");
@@ -202,19 +230,29 @@ export default function App() {
     }
 
     // Auto-pull from Google Sheets on app startup (as requested: "เมื่อเปิดแอป ให้โหลดข้อมูลจาก google sheet ทันที่ ไม่ต้องรอเข้าระบบ")
+    // Google Sheets is designated as the master database (ฐานข้อมูลหลัก)
     const autoPullFromSheetsOnLoad = async () => {
+      setIsSyncing(true);
+      window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+        detail: { status: "syncing", message: "กำลังดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก)..." } 
+      }));
+
       // A. Try direct Google Sheets OAuth API first if credentials exist
       const directSheetId = localStorage.getItem("sabaidee_dorm_direct_sheet_id");
       const googleToken = localStorage.getItem("sabaidee_dorm_google_token");
       
       if (directSheetId && googleToken) {
-        console.log("Auto-pulling from Direct Google Sheets OAuth API...");
+        console.log("Auto-pulling from Direct Google Sheets OAuth API (Master DB)...");
         try {
           const result = await pullDirectFromGoogleSheets(directSheetId, googleToken);
           if (result.success) {
             console.log("Auto-pull startup success (Direct API):", result.message);
             setLastSyncTimeState(getLastSyncTime());
             refreshAllState();
+            setIsSyncing(false);
+            window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+              detail: { status: "success", time: getLastSyncTime(), message: "ดึงข้อมูลจาก Google Sheets เรียบร้อยแล้ว" } 
+            }));
             return;
           } else {
             console.warn("Auto-pull startup failed (Direct API):", result.message);
@@ -227,20 +265,36 @@ export default function App() {
       // B. Fallback/Standard: Pull from Google Sheets using Web App (Apps Script URL)
       const targetUrl = initialUrl || getGsUrl();
       if (targetUrl) {
-        console.log("Auto-pulling from Google Sheets Apps Script Web App...");
+        console.log("Auto-pulling from Google Sheets Apps Script Web App (Master DB)...");
         try {
           const result = await pullFromGoogleSheets(targetUrl);
           if (result.success) {
             console.log("Auto-pull startup success (Apps Script):", result.message);
             setLastSyncTimeState(getLastSyncTime());
             refreshAllState();
+            setIsSyncing(false);
+            window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+              detail: { status: "success", time: getLastSyncTime(), message: "ดึงข้อมูลจาก Google Sheets เรียบร้อยแล้ว" } 
+            }));
+            return;
           } else {
             console.warn("Auto-pull startup failed (Apps Script):", result.message);
+            window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+              detail: { status: "error", message: result.message } 
+            }));
           }
         } catch (error) {
           console.warn("Auto-pull startup error (Apps Script):", error);
+          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+            detail: { status: "error", message: "ไม่สามารถเชื่อมต่อ Google Sheets ได้" } 
+          }));
         }
+      } else {
+        window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+          detail: { status: "idle", message: "ฐานข้อมูลหลัก: Google Sheets" } 
+        }));
       }
+      setIsSyncing(false);
     };
 
     autoPullFromSheetsOnLoad();
@@ -307,64 +361,44 @@ export default function App() {
   };
 
   // --- MUTATION WRAPPERS WITH REACTIVE REFRESH ---
-  const triggerAutoPush = async () => {
-    const currentUrl = getGsUrl();
-    if (!currentUrl) return;
-
-    setIsSyncing(true);
-    console.log("Auto-sync: Saving updates to Google Sheets...");
-    try {
-      const result = await pushToGoogleSheets(currentUrl);
-      setLastSyncTimeState(getLastSyncTime());
-      console.log("Auto-sync success:", result.message);
-    } catch (error) {
-      console.warn("Auto-sync failed to push to Google Sheets:", error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  // NOTE: Google Sheets is the master database (ฐานข้อมูลหลัก).
+  // Auto-push is disabled to prevent overwriting user-restored data on Google Sheets.
+  // Data updates locally for responsive UI, and manual push/pull controls are available.
 
   const handleSaveRoom = (room: Room) => {
     saveRoom(room);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteRoom = (id: string) => {
     deleteRoom(id);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveTenant = (tenant: Tenant) => {
     saveTenant(tenant);
     // Auto recalc bills on new contract creation
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteTenant = (roomId: string) => {
     deleteTenant(roomId);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveBanks = (bank: BankAccount) => {
     saveBankAccount(bank);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteBanks = (id: string) => {
     deleteBankAccount(id);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveMetersBatch = (items: any[]) => {
     saveMetersBatch(month, items, user?.username || "admin");
     refreshAllState();
-    triggerAutoPush();
     setTimeout(() => {
       alert(`บันทึกค่ามิเตอร์จำนวน ${items.length} ห้อง และประมวลผลจัดเก็บสำเร็จ!`);
     }, 100);
@@ -375,20 +409,17 @@ export default function App() {
     if (window.confirm("⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลมิเตอร์และการบันทึกค่าในรอบเดือนนี้? บิลสรุปค่าใช้จ่ายของห้องนี้จะถูกลบไปด้วย")) {
       deleteMeterReading(roomId, month);
       refreshAllState();
-      triggerAutoPush();
     }
   };
 
   const handleUpdateMeterReading = (item: any) => {
     saveMetersBatch(month, [item], user?.username || "admin");
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handlePayFIFO = (roomId: string, amount: number, method: "เงินสด" | "โอนธนาคาร", receiver: string, note: string) => {
     const result = payBillsFIFO(roomId, amount, method, receiver, note);
     refreshAllState();
-    triggerAutoPush();
     setTimeout(() => {
       if (result.success) {
         alert("บันทึกรับเงินตัดบิล FIFO เรียบร้อย!");
@@ -402,7 +433,6 @@ export default function App() {
     if (window.confirm("⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกและลบประวัติการชำระเงินรายการนี้? ยอดเงินที่จ่ายในบิลจะถูกปรับลดลง และยอดหนี้คงเหลืออาจเพิ่มขึ้น")) {
       const result = deletePayment(payId);
       refreshAllState();
-      triggerAutoPush();
       setTimeout(() => {
         if (result.success) {
           alert("ลบประวัติการชำระเงินและอัปเดตยอดบิลที่เกี่ยวข้องเรียบร้อยแล้ว!");
@@ -416,7 +446,6 @@ export default function App() {
   const handleUpdatePayment = (payId: string, updatedFields: Partial<PaymentRecord>) => {
     const result = updatePayment(payId, updatedFields);
     refreshAllState();
-    triggerAutoPush();
     setTimeout(() => {
       if (result.success) {
         alert("แก้ไขข้อมูลประวัติการชำระเงินเรียบร้อยแล้ว!");
@@ -440,7 +469,6 @@ export default function App() {
     });
 
     refreshAllState();
-    triggerAutoPush();
     setTimeout(() => {
       if (successRooms.length > 0) {
         alert(`บันทึกชำระเงินตัดบิล FIFO สำเร็จเรียบร้อยสำหรับ ${successRooms.length} ห้อง!${errorRooms.length > 0 ? ` (ล้มเหลว ${errorRooms.length} ห้อง)` : ""}`);
@@ -453,25 +481,21 @@ export default function App() {
   const handleSaveAdmin = (admin: Admin) => {
     saveAdmin(admin);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveOwnerInfo = (info: OwnerInfo) => {
     saveOwnerInfo(info);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteAdmin = (id: string) => {
     deleteAdmin(id);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveUtilityRate = (rate: UtilityRate) => {
     saveUtilityRate(rate);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteUtilityRate = (id: string) => {
@@ -480,32 +504,27 @@ export default function App() {
       alert(res.message);
     } else {
       refreshAllState();
-      triggerAutoPush();
     }
   };
 
   const handleSaveBillAnnouncement = (annc: BillAnnouncement) => {
     saveBillAnnouncement(annc);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteBillAnnouncement = (id: string) => {
     deleteBillAnnouncement(id);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleSaveAddedItemWrapper = (item: AddedItem) => {
     saveAddedItem(item);
     refreshAllState();
-    triggerAutoPush();
   };
 
   const handleDeleteAddedItemWrapper = (id: string, roomId: string, month: string) => {
     deleteAddedItem(id, roomId, month);
     refreshAllState();
-    triggerAutoPush();
   };
 
   // --- GOOGLE SHEETS SYNC ACTIONS ---
@@ -514,19 +533,32 @@ export default function App() {
     setGsUrl(url);
   };
 
-  const handlePushToSheets = async (url?: string) => {
-    setIsSyncing(true);
+  const handlePushToSheets = async (url?: string, force: boolean = false) => {
     const targetUrl = url ? url.trim() : gsUrl.trim();
-    if (targetUrl && targetUrl !== gsUrl) {
+    if (!targetUrl) {
+      alert("กรุณาระบุ URL ของ Google Apps Script Web App ก่อนทำการส่งข้อมูล");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "⚠️ คำเตือนสำคัญ (Google Sheets เป็นฐานข้อมูลหลัก):\n\n" +
+      "คุณกำลังจะส่งข้อมูลจากเครื่องนี้ไปเขียนทับแผ่นงาน Google Sheets\n" +
+      "หากบน Google Sheets มีข้อมูลที่ท่านได้กู้คืนไว้ ข้อมูลจะถูกเขียนทับด้วยข้อมูลจากเครื่องนี้\n\n" +
+      "คุณต้องการดำเนินการ 'ส่งข้อมูล (Push)' ไปยัง Google Sheets ใช่หรือไม่?"
+    );
+    if (!confirmed) return;
+
+    setIsSyncing(true);
+    if (targetUrl !== gsUrl) {
       handleSaveGsUrl(targetUrl);
     }
-    const result = await pushToGoogleSheets(targetUrl || gsUrl);
+    const result = await pushToGoogleSheets(targetUrl || gsUrl, force);
     setIsSyncing(false);
     setLastSyncTimeState(getLastSyncTime());
     alert(result.message);
   };
 
-  const handlePullFromSheets = async (url?: string) => {
+  const handlePullFromSheets = async (url?: string, silent: boolean = false) => {
     setIsSyncing(true);
     const targetUrl = url ? url.trim() : gsUrl.trim();
     if (targetUrl && targetUrl !== gsUrl) {
@@ -536,10 +568,14 @@ export default function App() {
     setIsSyncing(false);
     setLastSyncTimeState(getLastSyncTime());
     if (result.success) {
-      alert("ดึงข้อมูลจาก Google Sheets สำเร็จ! ระบบกำลังอัปเดตหน้าจอหลัก...");
       refreshAllState();
+      if (!silent) {
+        alert("✅ ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก) สำเร็จเรียบร้อยแล้ว!");
+      }
     } else {
-      alert(result.message);
+      if (!silent) {
+        alert(result.message);
+      }
     }
   };
 
@@ -653,30 +689,39 @@ export default function App() {
             <h1 className="text-sm font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
             <p className="text-[9px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
               <span>Dorm Ops Portal</span>
-              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.6</span>
+              <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.9</span>
               <span className={`w-1.5 h-1.5 rounded-full ${
-                realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse" :
-                realtimeSyncStatus.status === "success" ? "bg-emerald-400" :
-                realtimeSyncStatus.status === "error" ? "bg-rose-400" : "bg-emerald-400"
-              }`} title="Real-time sync" />
+                isSyncing ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
+              }`} title="ฐานข้อมูลหลัก: Google Sheets" />
             </p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-lg transition-all focus:outline-none"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePullFromSheets(undefined, false)}
+            disabled={isSyncing}
+            className="px-2.5 py-1.5 bg-emerald-500/30 hover:bg-emerald-500/50 border border-emerald-300/40 rounded-lg transition-all text-white flex items-center gap-1 text-[11px] font-bold disabled:opacity-50"
+            title="ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-amber-300" : ""}`} />
+            <span>ดึงชีต</span>
+          </button>
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-lg transition-all focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu Drawer Overlay */}
@@ -709,7 +754,7 @@ export default function App() {
                     <h1 className="text-base font-extrabold tracking-tight leading-none text-white">SABAIDEE DORM</h1>
                     <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Dorm Ops Portal</span>
-                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.6</span>
+                      <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.9</span>
                     </p>
                   </div>
                 </div>
@@ -720,6 +765,28 @@ export default function App() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
+                </button>
+              </div>
+
+              {/* Mobile Drawer Master Google Sheets Status & Pull */}
+              <div className="mb-4 p-3 bg-white/10 rounded-xl border border-white/15">
+                <div className="flex items-center justify-between text-xs font-bold text-white mb-2">
+                  <span className="flex items-center gap-1.5">
+                    <Cloud className="w-4 h-4 text-emerald-300" />
+                    <span>ฐานข้อมูลหลัก: Google Sheets</span>
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${isSyncing ? "bg-amber-300 animate-ping" : "bg-emerald-400"}`} />
+                </div>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handlePullFromSheets(undefined, false);
+                  }}
+                  disabled={isSyncing}
+                  className="w-full py-2 px-3 bg-emerald-500/40 hover:bg-emerald-500/60 active:bg-emerald-500/70 border border-emerald-400/40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-amber-300" : ""}`} />
+                  <span>{isSyncing ? "กำลังดึงข้อมูล..." : "ดึงข้อมูลจาก Google Sheets (Pull)"}</span>
                 </button>
               </div>
 
@@ -762,6 +829,14 @@ export default function App() {
                     <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">ผู้จัดการหอพัก</p>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={() => setIsDownloadModalOpen(true)}
+                      className="p-2 bg-white/10 hover:bg-blue-500/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      title="ดาวน์โหลดไฟล์ APP (.ZIP) ลงเครื่อง PC"
+                      id="mobile-download-app-btn"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
                     <button 
                       onClick={handleRestartSystem}
                       className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
@@ -813,42 +888,50 @@ export default function App() {
               <h1 className="text-base font-extrabold tracking-tight leading-none text-white whitespace-nowrap">SABAIDEE DORM</h1>
               <p className="text-[10px] text-white/70 font-bold mt-1 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Dorm Ops Portal</span>
-                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.6</span>
+                <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono font-bold tracking-normal leading-none">V.2026-PB02_2.9</span>
               </p>
             </div>
           )}
         </div>
 
-        {/* Real-time Google Sheets Sync Badge */}
+        {/* Master Google Sheets Status & Pull Button */}
         {isSidebarCollapsed ? (
           <div className="flex justify-center mb-4">
-            <div className={`p-1.5 rounded-full ${
-              realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse text-slate-900" :
-              realtimeSyncStatus.status === "success" ? "bg-emerald-500/20 text-emerald-300" :
-              realtimeSyncStatus.status === "error" ? "bg-rose-500/20 text-rose-300" : "bg-white/10 text-white/60"
-            }`} title="เชื่อมโยง Google Sheet เรียลไทม์">
-              <Cloud className="w-4 h-4" />
-            </div>
+            <button
+              onClick={() => handlePullFromSheets(undefined, false)}
+              disabled={isSyncing}
+              className={`p-2 rounded-xl cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${
+                isSyncing ? "bg-amber-400 text-slate-900 animate-spin" : "bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 hover:bg-emerald-500/40"
+              }`}
+              title="ดึงข้อมูลจาก Google Sheets (ฐานข้อมูลหลัก)"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
           </div>
         ) : (
           <div className="mx-2 mb-4 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-[11px] text-white/90 transition-all">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-bold">
-                <Cloud className={`w-3.5 h-3.5 ${realtimeSyncStatus.status === "syncing" ? "text-amber-400 animate-bounce" : "text-emerald-400"}`} />
-                <span>Google Sheet: เรียลไทม์</span>
+                <Cloud className={`w-3.5 h-3.5 ${isSyncing ? "text-amber-400 animate-spin" : "text-emerald-400"}`} />
+                <span>ฐานข้อมูลหลัก: ชีต</span>
               </div>
               <span className={`w-1.5 h-1.5 rounded-full ${
-                realtimeSyncStatus.status === "syncing" ? "bg-amber-400 animate-pulse" :
-                realtimeSyncStatus.status === "success" ? "bg-emerald-400" :
-                realtimeSyncStatus.status === "error" ? "bg-rose-400" : "bg-emerald-400"
+                isSyncing ? "bg-amber-400 animate-ping" : "bg-emerald-400"
               }`} />
             </div>
             <p className="mt-1 text-[10px] text-white/60 font-medium">
-              {realtimeSyncStatus.status === "syncing" && "กำลังส่งข้อมูลอัตโนมัติ..."}
-              {realtimeSyncStatus.status === "success" && `ซิงค์เรียลไทม์สำเร็จ: ${realtimeSyncStatus.time || "เรียบร้อย"}`}
-              {realtimeSyncStatus.status === "error" && "การเชื่อมโยงเรียลไทม์ติดขัด"}
-              {realtimeSyncStatus.status === "idle" && "ระบบเรียลไทม์พร้อมทำงาน"}
+              {isSyncing ? "กำลังดึงข้อมูลล่าสุด..." : `ซิงค์ล่าสุด: ${lastSyncTime || "พร้อมทำงาน"}`}
             </p>
+            <button
+              onClick={() => handlePullFromSheets(undefined, false)}
+              disabled={isSyncing}
+              className="mt-2 w-full py-1.5 px-2 bg-emerald-500/30 hover:bg-emerald-500/50 active:bg-emerald-500/60 border border-emerald-400/30 rounded-lg text-[10px] font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+              title="ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก)"
+              id="sidebar-pull-sheets-btn"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-amber-300" : ""}`} />
+              <span>ดึงข้อมูลจากชีต (Pull)</span>
+            </button>
           </div>
         )}
 
@@ -895,6 +978,14 @@ export default function App() {
             {isSidebarCollapsed ? (
               <div className="flex flex-col items-center gap-2 w-full">
                 <button 
+                  onClick={() => setIsDownloadModalOpen(true)}
+                  className="p-2 bg-white/10 hover:bg-blue-500/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
+                  title="ดาวน์โหลดไฟล์ APP (.ZIP) ลงเครื่อง PC"
+                  id="sidebar-download-app-btn-collapsed"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <button 
                   onClick={handleRestartSystem}
                   className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer w-full flex justify-center"
                   title="เริ่มระบบใหม่ (Restart)"
@@ -912,6 +1003,14 @@ export default function App() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={() => setIsDownloadModalOpen(true)}
+                  className="p-2 bg-white/10 hover:bg-blue-500/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="ดาวน์โหลดไฟล์ APP (.ZIP) ลงเครื่อง PC"
+                  id="sidebar-download-app-btn"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
                 <button 
                   onClick={handleRestartSystem}
                   className="p-2 bg-white/10 hover:bg-emerald-600/30 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
@@ -956,7 +1055,20 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Master Google Sheets Pull Button */}
+            <button
+              onClick={() => handlePullFromSheets(undefined, false)}
+              disabled={isSyncing}
+              className="px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-300 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="ดึงข้อมูลล่าสุดจาก Google Sheets (ฐานข้อมูลหลัก) มายังแอป"
+              id="header-pull-sheets-btn"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? "animate-spin" : ""}`} />
+              <span className="text-xs font-bold whitespace-nowrap hidden xs:inline sm:inline">
+                {isSyncing ? "กำลังดึงข้อมูล..." : "ดึงข้อมูลจากชีต"}
+              </span>
+            </button>
             <button
               onClick={handleRestartSystem}
               className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-sm"
@@ -988,7 +1100,8 @@ export default function App() {
                   month={month}
                   onNavigateToRooms={() => setActiveTab("rooms")}
                   lastSyncTime={lastSyncTime}
-                  onSync={handlePushToSheets}
+                  onPull={() => handlePullFromSheets(undefined, false)}
+                  onPush={() => handlePushToSheets()}
                   isSyncing={isSyncing}
                 />
               )}
@@ -1113,6 +1226,107 @@ export default function App() {
           ownerInfo={ownerInfo}
           onClose={() => setPrintConfig(prev => ({ ...prev, isOpen: false }))}
         />
+      )}
+
+      {/* Project Download to PC Modal */}
+      {isDownloadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-white/20 rounded-lg">
+                  <Download className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold leading-none">ดาวน์โหลดไฟล์ APP ลงเครื่อง PC</h3>
+                  <p className="text-[11px] text-blue-100 font-medium mt-1">แพ็กซอร์สโค้ดทั้งหมดเป็นไฟล์ .ZIP เพื่อเปิดรันบนคอมพิวเตอร์</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsDownloadModalOpen(false)}
+                className="p-1.5 hover:bg-white/20 active:bg-white/30 rounded-lg text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 text-slate-700">
+              <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-blue-950 flex items-center gap-1.5">
+                      <span>sabaidee-dorm-project.zip</span>
+                      <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.2 rounded font-bold">~184 KB</span>
+                    </h4>
+                    <p className="text-xs text-blue-700 mt-0.5">รวมโค้ด React, TypeScript, Tailwind, Server และคู่มือทั้งหมด (โฟลเดอร์ sabaidee-dormitory)</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={handleDownloadProject}
+                      disabled={isDownloadingZip}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Download className={`w-4 h-4 ${isDownloadingZip ? "animate-bounce" : ""}`} />
+                      <span>{isDownloadingZip ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลดทันที"}</span>
+                    </button>
+                    <a
+                      href="/api/download-project"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2.5 bg-white hover:bg-blue-100/50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+                      title="เปิดดาวน์โหลดในแท็บใหม่ (แก้ปัญหาเบราว์เซอร์บล็อกการโหลดในเฟรม)"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Windows 10/11 Extract Compatibility Notice */}
+                <div className="pt-2 border-t border-blue-200/60 flex items-start gap-2 text-[11px] text-blue-900 leading-relaxed font-medium">
+                  <span className="text-base leading-none">✅</span>
+                  <p>
+                    <strong>แก้ไขปัญหากล่องข้อความ Windows "โฟลเดอร์ที่บีบอัดว่างเปล่า" เรียบร้อย:</strong> ไฟล์นี้ได้รับการสร้างโครงสร้างโฟลเดอร์ราก <code className="bg-white/80 px-1 py-0.5 rounded font-mono font-bold">sabaidee-dormitory/</code> พร้อมแฟล็กสารบบมาตรฐาน (DOS Directory Attributes) ทำให้สามารถคลิกขวาแล้วกด <strong>"แยกแฟ้มทั้งหมด... (Extract All)"</strong> บน Windows ได้ทันที หรือเปิดด้วย 7-Zip / WinRAR ได้อย่างไร้ปัญหาครับ
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs text-slate-600">
+                <h5 className="font-bold text-slate-900 text-sm">💻 วิธีติดตั้งและเปิดใช้งานบนเครื่องคอมพิวเตอร์ (PC):</h5>
+                <ol className="list-decimal list-inside space-y-1.5 font-medium leading-relaxed">
+                  <li><strong>แตกไฟล์ ZIP:</strong> คลิกขวาที่ไฟล์ <code className="bg-slate-100 px-1 py-0.5 rounded font-bold font-mono">sabaidee-dorm-project.zip</code> เลือก <strong>Extract All... (แยกแฟ้มทั้งหมด)</strong></li>
+                  <li><strong>ติดตั้ง Node.js:</strong> ตรวจสอบว่าในเครื่องมี Node.js (โหลดฟรีที่ nodejs.org)</li>
+                  <li><strong>เปิด Terminal / CMD:</strong> เปิดเข้าไปที่โฟลเดอร์ <code className="bg-slate-100 px-1 py-0.5 rounded font-bold font-mono">sabaidee-dormitory</code> แล้วพิมพ์คำสั่ง:</li>
+                </ol>
+                <div className="bg-slate-900 text-slate-100 p-3 rounded-xl font-mono text-[11px] space-y-1">
+                  <p className="text-emerald-400"># 1. ติดตั้งไลบรารีของโปรเจกต์</p>
+                  <p>npm install</p>
+                  <p className="text-emerald-400 mt-2"># 2. เริ่มต้นรันเซิร์ฟเวอร์ระบบ</p>
+                  <p>npm run dev</p>
+                </div>
+                <p className="text-slate-600">
+                  4. เปิดเว็บเบราว์เซอร์แล้วไปที่: <span className="font-bold text-blue-600 font-mono">http://localhost:3000</span>
+                </p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200/80 p-3 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p>
+                  <strong>คำแนะนำเพิ่มเติม:</strong> ในหน้าต่าง Settings (รูปฟันเฟือง ⚙️ บนขวาของ AI Studio) คุณสามารถกดแท็บ <strong>GitHub</strong> เพื่อเชื่อมต่อและส่งโค้ดทั้งหมดขึ้น GitHub ได้โดยตรงอีกทางหนึ่งครับ
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsDownloadModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

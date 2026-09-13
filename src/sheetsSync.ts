@@ -36,13 +36,45 @@ function getLocalTable(key: string): any[] {
   }
 }
 
+// Helper to detect if current local database only contains default mock seed data
+export function isMockSeedData(): boolean {
+  try {
+    const rooms = getLocalTable("dorm_rooms");
+    const tenants = getLocalTable("dorm_tenants");
+    if (rooms.length === 0) return true;
+    const mockNames = ["สมชาย ใจดี", "สมศรี มีสุข", "สมปอง น้องดอย", "สมหวัง ดังใจ"];
+    const isMockRoomIds = rooms.length <= 4 && rooms.every((r: any) => ["R101", "R102", "R103", "R104"].includes(r.id));
+    const isAllMockTenants = tenants.length === 0 || tenants.every((t: any) => mockNames.includes(t.name));
+    return isMockRoomIds && isAllMockTenants;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Push current local database state to Google Sheets via the Web App URL
+ * NOTE: Google Sheets is the primary database (ฐานข้อมูลหลัก).
+ * Pushing must only be triggered manually with explicit confirmation and safety checks.
  */
-export async function pushToGoogleSheets(url: string): Promise<{ success: boolean; message: string }> {
+export async function pushToGoogleSheets(url: string, force: boolean = false): Promise<{ success: boolean; message: string }> {
   const targetUrl = url.trim() || getGsUrl();
   if (!targetUrl) {
     return { success: false, message: "ไม่พบ URL ของ Google Apps Script" };
+  }
+
+  const rooms = getLocalTable("dorm_rooms");
+  if (rooms.length === 0) {
+    return {
+      success: false,
+      message: "⚠️ ปฏิเสธการส่งข้อมูล: ไม่พบข้อมูลห้องพักในระบบ เพื่อป้องกันข้อมูลจริงใน Google Sheets เสียหาย จึงไม่อนุญาตให้ส่งข้อมูลว่างเปล่าไปเขียนทับ"
+    };
+  }
+
+  if (!force && isMockSeedData()) {
+    return {
+      success: false,
+      message: "⚠️ ปฏิเสธการส่งข้อมูล: ข้อมูลในเครื่องขณะนี้เป็นเพียงชุดข้อมูลจำลองเริ่มต้น (Seed Mock Data) เพื่อป้องกันข้อมูลจริงใน Google Sheets สูญหาย ระบบไม่อนุญาตให้ส่งข้อมูลทับ กรุณากดปุ่ม 'ดึงข้อมูล (Pull)' เพื่อดึงข้อมูลจริงจาก Google Sheets"
+    };
   }
 
   const payload = {
@@ -389,9 +421,25 @@ export const SHEETS_CONFIG: Record<string, { sheetName: string; headers: string[
  */
 export async function pushDirectToGoogleSheets(
   spreadsheetId: string,
-  token: string
+  token: string,
+  force: boolean = false
 ): Promise<{ success: boolean; message: string }> {
   try {
+    const rooms = getLocalTable("dorm_rooms");
+    if (rooms.length === 0) {
+      return {
+        success: false,
+        message: "⚠️ ปฏิเสธการส่งข้อมูล: ไม่พบข้อมูลห้องพักในระบบ เพื่อป้องกันข้อมูลจริงใน Google Sheets เสียหาย จึงไม่อนุญาตให้ส่งข้อมูลว่างเปล่าไปเขียนทับ"
+      };
+    }
+
+    if (!force && isMockSeedData()) {
+      return {
+        success: false,
+        message: "⚠️ ปฏิเสธการส่งข้อมูล: ข้อมูลในเครื่องขณะนี้เป็นเพียงชุดข้อมูลจำลองเริ่มต้น เพื่อป้องกันฐานข้อมูลหลักบน Google Sheets เสียหาย ระบบไม่อนุญาตให้เขียนทับ"
+      };
+    }
+
     // 1. Fetch spreadsheet metadata to check available sheets
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -604,78 +652,26 @@ export async function pullDirectFromGoogleSheets(
   }
 }
 
-// Real-time automatic synchronization runner (debounced to protect Google APIs and limits)
+// Status tracker for master database state
 let syncTimeout: any = null;
 
+/**
+ * Trigger sync status update.
+ * NOTE: Google Sheets is designated as the primary master database (ฐานข้อมูลหลัก).
+ * To prevent automatic overwrite of restored data on Google Sheets, background auto-push is disabled.
+ * Pulling is performed automatically on startup, and manual pull/push controls are available.
+ */
 export function triggerRealtimeSync() {
   if (syncTimeout) {
     clearTimeout(syncTimeout);
   }
 
-  // Dispatch event indicating sync is starting/pending
-  window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-    detail: { status: "syncing", message: "กำลังบันทึกข้อมูลเรียลไทม์..." } 
-  }));
-
-  syncTimeout = setTimeout(async () => {
-    // 1. Check if direct Google Sheets OAuth API is available and configured
-    const directSheetId = localStorage.getItem("sabaidee_dorm_direct_sheet_id");
-    const googleToken = localStorage.getItem("sabaidee_dorm_google_token");
-
-    if (directSheetId && googleToken) {
-      console.log("Realtime auto-sync: Pushing to Direct Google Sheets OAuth API...");
-      try {
-        const result = await pushDirectToGoogleSheets(directSheetId, googleToken);
-        if (result.success) {
-          console.log("Realtime auto-sync success (Direct API):", result.message);
-          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-            detail: { status: "success", time: new Date().toLocaleTimeString("th-TH") } 
-          }));
-        } else {
-          console.warn("Realtime auto-sync failed (Direct API):", result.message);
-          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-            detail: { status: "error", message: result.message } 
-          }));
-        }
-      } catch (error: any) {
-        console.warn("Realtime auto-sync error (Direct API):", error);
-        window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-          detail: { status: "error", message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" } 
-        }));
-      }
-      return;
-    }
-
-    // 2. Fallback to standard Apps Script Web App URL
-    const gsUrl = getGsUrl();
-    if (gsUrl) {
-      console.log("Realtime auto-sync: Pushing to Google Sheets Web App...");
-      try {
-        const result = await pushToGoogleSheets(gsUrl);
-        if (result.success) {
-          console.log("Realtime auto-sync success (Apps Script):", result.message);
-          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-            detail: { status: "success", time: new Date().toLocaleTimeString("th-TH") } 
-          }));
-        } else {
-          console.warn("Realtime auto-sync failed (Apps Script):", result.message);
-          window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-            detail: { status: "error", message: result.message } 
-          }));
-        }
-      } catch (error: any) {
-        console.warn("Realtime auto-sync error (Apps Script):", error);
-        window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-          detail: { status: "error", message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" } 
-        }));
-      }
-    } else {
-      // No sync targets configured
-      window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
-        detail: { status: "idle" } 
-      }));
-    }
-  }, 1500); // Debounce for 1.5 seconds to batch rapid/consecutive writes
+  syncTimeout = setTimeout(() => {
+    window.dispatchEvent(new CustomEvent("dorm_realtime_sync_status", { 
+      detail: { status: "idle", message: "ฐานข้อมูลหลัก: Google Sheets" } 
+    }));
+  }, 500);
 }
+
 
 
